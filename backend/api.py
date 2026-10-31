@@ -6,7 +6,8 @@ from pydantic import BaseModel
 from backend.engine.discard_ledger import IllegalAction
 from backend.engine.models import Card, GameState
 from backend.engine.rules import Action, apply_action, new_game
-from backend.solver.ev_calculator import KeepAdvice, Recommendation, keep_advice, recommend
+from backend.solver.ev_calculator import KeepAdvice, Recommendation
+from backend.solver.ismcts import advise, keep_search
 
 app = FastAPI(title="SaltEngine")
 
@@ -39,7 +40,7 @@ class KeepRequest(BaseModel):
 
 def _respond(state: GameState) -> StateResponse:
     in_round = state.phase in ("draw", "play_duo")
-    return StateResponse(state=state, recommendation=recommend(state) if in_round else None)
+    return StateResponse(state=state, recommendation=advise(state) if in_round else None)
 
 
 @app.post("/api/new_game")
@@ -54,4 +55,4 @@ def apply(req: ApplyRequest) -> StateResponse:
 
 @app.post("/api/keep")
 def keep(req: KeepRequest) -> KeepAdvice:
-    return keep_advice(req.state, req.first, req.second)
+    return keep_search(req.state, req.first, req.second)

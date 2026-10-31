@@ -29,3 +29,14 @@ def test_search_banks_a_big_lead() -> None:
     result = ismcts.search(s, budget_s=0.1)
     choice = ismcts.best(result)
     assert choice[0] == "end" and choice[1] in ("stop", "last_chance")
+
+
+def test_live_advice_takes_the_decision_from_search() -> None:
+    from backend.solver.ismcts import advise
+
+    s = _hero_with(["shell"] * 5 + ["octopus"] * 2)  # big lead, end-round decision
+    rec = advise(s)
+    assert rec.search and rec.search_best in rec.search
+    assert rec.end_round is not None and rec.end_round.best == ("continue" if rec.search_best == "end:none" else rec.search_best.split(":")[1])
+    draw = advise(s.model_copy(update={"phase": "draw"}))
+    assert draw.search_best == f"draw:{draw.best_draw}"

@@ -87,6 +87,9 @@ class Recommendation(BaseModel):
     best_draw: Literal["deck", "a", "b"] | None = None
     duos: list[DuoOption] | None = None
     end_round: EndRoundAdvice | None = None
+    # Search verdict for the hero's current decision (see solver/ismcts.advise): action -> expected round margin.
+    search: dict[str, float] | None = None
+    search_best: str | None = None
     opponents: list[OpponentView]
 
 
