@@ -13,11 +13,27 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from collections.abc import Callable
+from typing import Protocol
+
 from backend.engine.belief_tracker import Dist, OpponentBeliefTracker
-from backend.engine.models import END_ROUND_MIN_POINTS, NON_WHITE_COLORS, Card, CardName, Color, GameState
-from backend.engine.rules import all_cards, color_bonus_counts, counts, score_counts, unseen_counts
+from backend.engine.models import DECK_COMPOSITION, END_ROUND_MIN_POINTS, NON_WHITE_COLORS, Card, CardName, Color, GameState
+from backend.engine.rules import all_cards, color_bonus_counts, counts, score_counts
 
 SIMULATIONS = 300
+
+
+class Beliefs(Protocol):
+    deck: Dist
+    slots: dict[str, Dist]
+
+    def summary(self) -> dict[str, dict[str, object]]: ...
+    def sample_hidden(self, rng: random.Random) -> tuple[dict[str, tuple[Counter[CardName], Counter[Color]]], Counter[CardName]]: ...
+
+
+BeliefFactory = Callable[[GameState], Beliefs]
+# The belief model behind /api/apply. Swap only when the arena shows a significant win.
+BELIEFS: BeliefFactory = OpponentBeliefTracker
 
 
 class DrawOption(BaseModel):
@@ -73,6 +89,8 @@ class Recommendation(BaseModel):
 
 
 def _gain(names: Counter[CardName], colors: Counter[Color], base: int, name: CardName, color: Color | None) -> int:
+    if names[name] >= DECK_COMPOSITION[name]:
+        return 0  # every copy is already held: estimated deck counts can still carry float dust like 1e-10
     names[name] += 1
     if color:
         colors[color] += 1
@@ -141,15 +159,15 @@ def draw_options(state: GameState, deck: Dist) -> list[DrawOption]:
     return opts
 
 
-def keep_advice(state: GameState, first: Card, second: Card) -> KeepAdvice:
-    deck = OpponentBeliefTracker(state).deck
+def keep_advice(state: GameState, first: Card, second: Card, beliefs: BeliefFactory | None = None) -> KeepAdvice:
+    deck = (beliefs or BELIEFS)(state).deck
     names, colors = counts(all_cards(state.hero))
     v = (card_value(names, colors, deck, first.name, first.color, from_deck=True),
          card_value(names, colors, deck, second.name, second.color, from_deck=True))
     return KeepAdvice(keep_index=0 if v[0] >= v[1] else 1, values=(round(v[0], 3), round(v[1], 3)))
 
 
-def duo_options(state: GameState, beliefs: OpponentBeliefTracker) -> list[DuoOption]:
+def duo_options(state: GameState, beliefs: Beliefs) -> list[DuoOption]:
     hero = state.hero
     deck = beliefs.deck
     hand = Counter(c.name for c in hero.known_hand)
@@ -189,25 +207,6 @@ def _random_color(rng: random.Random, name: CardName) -> Color:
     return "white" if name == "mermaid" else rng.choice(NON_WHITE_COLORS)
 
 
-def _sample_hidden(state: GameState, beliefs: OpponentBeliefTracker, rng: random.Random) -> tuple[dict[str, tuple[Counter[CardName], Counter[Color]]], Counter[CardName]]:
-    """Sample every opponent's full hand and return (hands, remaining deck names)."""
-    original = unseen_counts(state)
-    remaining = Counter(original)
-    hands = {}
-    for p in state.opponents:
-        names, colors = counts(all_cards(p))
-        slot = beliefs.slots[p.player_id]
-        for _ in range(p.unknown_count):
-            keys = [k for k in remaining if remaining[k] > 0]
-            weights = [slot.get(k, 0.0) * remaining[k] / original[k] for k in keys]
-            k = rng.choices(keys, weights)[0]
-            remaining[k] -= 1
-            names[k] += 1
-            colors[_random_color(rng, k)] += 1
-        hands[p.player_id] = (names, colors)
-    return hands, remaining
-
-
 def _last_turn(names: Counter[CardName], colors: Counter[Color], state: GameState, remaining: Counter[CardName], rng: random.Random) -> int:
     """An opponent's final turn: best of a blind two-card draw or either discard top."""
     base = score_counts(names, colors)
@@ -222,7 +221,7 @@ def _last_turn(names: Counter[CardName], colors: Counter[Color], state: GameStat
     return base + max((_gain(names, colors, base, n, c) for n, c in options), default=0)
 
 
-def simulate(state: GameState, beliefs: OpponentBeliefTracker) -> tuple[list[OpponentView], EndRoundAdvice | None]:
+def simulate(state: GameState, beliefs: Beliefs) -> tuple[list[OpponentView], EndRoundAdvice | None]:
     rng = random.Random(state.round_number * 1000 + state.deck_count)
     hero_names, hero_colors = counts(all_cards(state.hero))
     hero_pts = score_counts(hero_names, hero_colors)
@@ -230,7 +229,7 @@ def simulate(state: GameState, beliefs: OpponentBeliefTracker) -> tuple[list[Opp
     opp_pts: dict[str, list[int]] = {p.player_id: [] for p in state.opponents}
     stop_m = lc_m = lc_wins = 0.0
     for _ in range(SIMULATIONS):
-        hands, remaining = _sample_hidden(state, beliefs, rng)
+        hands, remaining = beliefs.sample_hidden(rng)
         now = {pid: score_counts(*h) for pid, h in hands.items()}
         for pid, v in now.items():
             opp_pts[pid].append(v)
@@ -269,8 +268,8 @@ def simulate(state: GameState, beliefs: OpponentBeliefTracker) -> tuple[list[Opp
                                  p_last_chance_win=round(lc_wins / SIMULATIONS, 3), best=best)
 
 
-def recommend(state: GameState) -> Recommendation:
-    beliefs = OpponentBeliefTracker(state)
+def recommend(state: GameState, factory: BeliefFactory | None = None) -> Recommendation:
+    beliefs = (factory or BELIEFS)(state)
     names, colors = counts(all_cards(state.hero))
     views, end_round = simulate(state, beliefs)
     rec = Recommendation(

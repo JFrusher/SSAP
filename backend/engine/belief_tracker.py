@@ -6,8 +6,11 @@ Evidence: when an opponent draws blind while card X sits on top of a discard pil
 already holds X's partner would likely have taken it. Bayes' rule then lowers the chance that
 their hand holds X's partner.
 """
-from backend.engine.models import CardName, GameState, PlayerState
-from backend.engine.rules import unseen_counts
+import random
+from collections import Counter
+
+from backend.engine.models import NON_WHITE_COLORS, CardName, Color, GameState, PlayerState
+from backend.engine.rules import all_cards, counts, unseen_counts
 
 # Assumed behaviour: a player holding a card's partner still passes on that card half the time.
 PASS_LIKELIHOOD = 0.5
@@ -84,3 +87,20 @@ class OpponentBeliefTracker:
                 "p_holds_mermaid": max(p_mermaid_unseen, float(any(c.name == "mermaid" for c in p.known_hand))),
             }
         return out
+
+    def sample_hidden(self, rng: random.Random) -> tuple[dict[str, tuple[Counter[CardName], Counter[Color]]], Counter[CardName]]:
+        """Sample every opponent's full hand (slot marginals, drawn without replacement) and the deck's contents."""
+        original = unseen_counts(self.state)
+        remaining = Counter(original)
+        hands = {}
+        for p in self.state.opponents:
+            names, colors = counts(all_cards(p))
+            slot = self.slots[p.player_id]
+            for _ in range(p.unknown_count):
+                keys = [k for k in remaining if remaining[k] > 0]
+                k = rng.choices(keys, [slot.get(k, 0.0) * remaining[k] / original[k] for k in keys])[0]
+                remaining[k] -= 1
+                names[k] += 1
+                colors["white" if k == "mermaid" else rng.choice(NON_WHITE_COLORS)] += 1
+            hands[p.player_id] = (names, colors)
+        return hands, remaining

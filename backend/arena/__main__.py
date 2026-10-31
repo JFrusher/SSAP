@@ -23,7 +23,7 @@ def run_one(args: tuple[list[str], int, int]) -> int | None:
     names, seed, i = args
     n = len(names)
     order = [(j + i) % n for j in range(n)]  # order[seat] = bot index
-    seat = play_game([BOTS[names[b]]() for b in order], random.Random(seed * 1_000_003 + i))
+    seat, _ = play_game([BOTS[names[b]]() for b in order], random.Random(seed * 1_000_003 + i))
     return None if seat is None else order[seat]
 
 
@@ -38,7 +38,7 @@ def main() -> None:
     if not 2 <= len(names) <= 4 or any(b not in BOTS for b in names):
         raise SystemExit(f"--bots needs 2-4 of {list(BOTS)}")
     with Pool(a.workers) as pool:
-        results = pool.map(run_one, [(names, a.seed, i) for i in range(a.games)], chunksize=8)
+        results = pool.map(run_one, [(names, a.seed, i) for i in range(a.games)], chunksize=max(1, a.games // (a.workers * 8)))
     print(f"{a.games} games, seed {a.seed}, seats rotated")
     for b, name in enumerate(names):
         wins = sum(r == b for r in results)

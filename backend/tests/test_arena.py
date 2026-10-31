@@ -15,7 +15,8 @@ def test_wilson_interval() -> None:
 @pytest.mark.parametrize("seats", [2, 3, 4])
 def test_random_games_finish_with_consistent_views(seats: int) -> None:
     # play_game asserts every seat's view agrees on scores and rules.apply_action checks deck consistency each move
-    winner = play_game([RandomBot() for _ in range(seats)], random.Random(seats))
+    winner, history = play_game([RandomBot() for _ in range(seats)], random.Random(seats))
+    assert history
     assert winner is None or 0 <= winner < seats
 
 
@@ -24,5 +25,5 @@ def test_games_are_reproducible_from_seed() -> None:
 
 
 def test_greedy_beats_random() -> None:
-    wins = sum(play_game([GreedyBot(), RandomBot()], random.Random(i)) == 0 for i in range(6))
+    wins = sum(play_game([GreedyBot(), RandomBot()], random.Random(i))[0] == 0 for i in range(6))
     assert wins >= 5

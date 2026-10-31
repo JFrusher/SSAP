@@ -160,3 +160,14 @@ def test_lookahead_never_exceeds_physical_card_counts() -> None:
     s = _hero_with(["sailor"]).model_copy(update={"phase": "draw"})
     rec = recommend(s)
     assert rec.draw
+
+
+def test_lookahead_ignores_float_dust_in_deck_estimates() -> None:
+    from collections import Counter
+
+    from backend.solver.ev_calculator import card_value
+
+    # Particle averages can leave 1.0000000001 sailors in the deck while the hero holds the other one.
+    deck = {"sailor": 1.0000000001, "crab": 5.0}
+    v = card_value(Counter({"sailor": 1}), Counter({"pink": 1}), deck, "sailor", None, from_deck=True)
+    assert v >= 5
