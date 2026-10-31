@@ -1,7 +1,7 @@
 """Card, player and game state models (base game, 58 cards)."""
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 CardName = Literal[
     "crab", "boat", "fish", "shark", "swimmer",
@@ -86,6 +86,63 @@ class RoundResult(BaseModel):
     awarded: dict[str, int]
 
 
+# ---------------------------------------------------------------- actions
+
+
+class StartRound(BaseModel):
+    kind: Literal["start_round"] = "start_round"
+    pile_a: Card
+    pile_b: Card
+    first_player_id: str
+
+
+class DrawDeck(BaseModel):
+    kind: Literal["draw_deck"] = "draw_deck"
+    kept: Card | None = None  # hero only: the card kept
+    discarded: Card | None = None  # None only when the deck had a single card
+    pile: Pile | None = None
+
+
+class TakeDiscard(BaseModel):
+    kind: Literal["take_discard"] = "take_discard"
+    pile: Pile
+
+
+class PlayDuo(BaseModel):
+    kind: Literal["play_duo"] = "play_duo"
+    cards: tuple[Card, Card]
+    crab_pile: Pile | None = None
+    crab_card_id: str | None = None
+    fish_card: Card | None = None  # hero only: card drawn
+    steal_from: str | None = None
+    stolen_card: Card | None = None  # required when the hero is thief or victim
+
+
+class EndTurn(BaseModel):
+    kind: Literal["end_turn"] = "end_turn"
+    call: Literal["stop", "last_chance"] | None = None
+
+
+class ResolveRound(BaseModel):
+    kind: Literal["resolve_round"] = "resolve_round"
+    revealed: dict[str, list[Card]] = {}  # opponent id -> their unknown hand cards
+
+
+Action = Annotated[
+    StartRound | DrawDeck | TakeDiscard | PlayDuo | EndTurn | ResolveRound,
+    Field(discriminator="kind"),
+]
+
+
+class LogEntry(BaseModel):
+    """One applied action as the hero saw it, with the discard tops just before it (for belief replay)."""
+
+    actor: str
+    action: Action
+    top_a: Card | None
+    top_b: Card | None
+
+
 Phase = Literal["round_start", "draw", "play_duo", "round_end", "game_over"]
 
 
@@ -104,6 +161,7 @@ class GameState(BaseModel):
     round_end_reason: Literal["stop", "last_chance", "deck_empty"] | None = None
     history: list[RoundResult] = []
     winner_id: str | None = None
+    log: list[LogEntry] = []  # this round's actions, starting with start_round
 
     def player(self, player_id: str) -> PlayerState:
         for p in self.players:

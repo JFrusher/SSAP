@@ -6,7 +6,7 @@ so bots see exactly what the live app would see and every move is consistency-ch
 import random
 from dataclasses import dataclass, field
 
-from backend.engine.models import DECK_COMPOSITION, NON_WHITE_COLORS, Card, CardName, Color, GameState
+from backend.engine.models import DECK_COMPOSITION, NON_WHITE_COLORS, Card, CardName, Color, GameState, RoundResult
 from backend.engine.rules import (
     Action, DrawDeck, EndTurn, PlayDuo, ResolveRound, StartRound, TakeDiscard, apply_action, new_game,
 )
@@ -139,8 +139,8 @@ def _resolve(t: Table) -> None:
     assert len(scores) == 1, f"seat views disagree on scores: {scores}"
 
 
-def play_game(bots: list[Bot], rng: random.Random) -> int | None:
-    """Play one full game; returns the winning seat, or None if MAX_ROUNDS is hit."""
+def play_game(bots: list[Bot], rng: random.Random) -> tuple[int | None, list[RoundResult]]:
+    """Play one full game; returns (winning seat or None if MAX_ROUNDS is hit, round history)."""
     n = len(bots)
     t = Table(views=[new_game([f"s{i}" for i in range(n)], i) for i in range(n)])
     first = rng.randrange(n)
@@ -158,7 +158,7 @@ def play_game(bots: list[Bot], rng: random.Random) -> int | None:
         ender = t.seat(t.ref.last_chance_caller or t.ref.active_player_id)
         _resolve(t)
         if t.ref.phase == "game_over":
-            return t.seat(t.ref.winner_id)  # type: ignore[arg-type]
+            return t.seat(t.ref.winner_id), t.ref.history  # type: ignore[arg-type]
         first = (ender + 1) % n
-    return None
+    return None, t.ref.history
 

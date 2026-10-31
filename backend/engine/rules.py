@@ -1,12 +1,17 @@
 """Scoring and pure state transitions: apply_action(state, action) -> new state."""
 from collections import Counter
 from collections.abc import Iterable
-from typing import Annotated, Literal
-
-from pydantic import BaseModel, Field
 
 from backend.engine.discard_ledger import DiscardLedger, IllegalAction
-from backend.engine.models import (
+from backend.engine.models import (  # noqa: F401  (action classes re-exported for callers)
+    Action,
+    DrawDeck,
+    EndTurn,
+    LogEntry,
+    PlayDuo,
+    ResolveRound,
+    StartRound,
+    TakeDiscard,
     DECK_COMPOSITION,
     DECK_SIZE,
     END_ROUND_MIN_POINTS,
@@ -16,7 +21,6 @@ from backend.engine.models import (
     CardName,
     Color,
     GameState,
-    Pile,
     PlayerState,
     RoundResult,
 )
@@ -62,54 +66,6 @@ def color_bonus(cards: Iterable[Card]) -> int:
 
 def all_cards(p: PlayerState) -> list[Card]:
     return p.known_hand + p.played_duos
-
-
-# ---------------------------------------------------------------- actions
-
-
-class StartRound(BaseModel):
-    kind: Literal["start_round"] = "start_round"
-    pile_a: Card
-    pile_b: Card
-    first_player_id: str
-
-
-class DrawDeck(BaseModel):
-    kind: Literal["draw_deck"] = "draw_deck"
-    kept: Card | None = None  # hero only: the card kept
-    discarded: Card | None = None  # None only when the deck had a single card
-    pile: Pile | None = None
-
-
-class TakeDiscard(BaseModel):
-    kind: Literal["take_discard"] = "take_discard"
-    pile: Pile
-
-
-class PlayDuo(BaseModel):
-    kind: Literal["play_duo"] = "play_duo"
-    cards: tuple[Card, Card]
-    crab_pile: Pile | None = None
-    crab_card_id: str | None = None
-    fish_card: Card | None = None  # hero only: card drawn
-    steal_from: str | None = None
-    stolen_card: Card | None = None  # required when the hero is thief or victim
-
-
-class EndTurn(BaseModel):
-    kind: Literal["end_turn"] = "end_turn"
-    call: Literal["stop", "last_chance"] | None = None
-
-
-class ResolveRound(BaseModel):
-    kind: Literal["resolve_round"] = "resolve_round"
-    revealed: dict[str, list[Card]] = {}  # opponent id -> their unknown hand cards
-
-
-Action = Annotated[
-    StartRound | DrawDeck | TakeDiscard | PlayDuo | EndTurn | ResolveRound,
-    Field(discriminator="kind"),
-]
 
 
 # ---------------------------------------------------------------- helpers
@@ -377,6 +333,10 @@ _HANDLERS = {
 def apply_action(state: GameState, action: Action) -> GameState:
     """Pure transition: returns a new state, never mutates the input."""
     _require(state.phase != "game_over", "the game is over")
-    new = _HANDLERS[action.kind](state.model_copy(deep=True), action)  # type: ignore[operator]
+    # the log is append-only, so it is left out of the deep copy (copying it every move is quadratic)
+    new = _HANDLERS[action.kind](state.model_copy(update={"log": []}).model_copy(deep=True), action)  # type: ignore[operator]
     assert_consistent(new)
-    return new
+    entry = LogEntry(actor=state.active_player_id if action.kind != "start_round" else "",
+                     action=action, top_a=state.discard_ledger.top("a"), top_b=state.discard_ledger.top("b"))
+    log = [entry] if action.kind == "start_round" else state.log + [entry]
+    return new.model_copy(update={"log": log})
