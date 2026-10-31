@@ -30,6 +30,9 @@ class DuoOption(BaseModel):
     duo: Literal["crab", "boat", "fish", "shark"]
     effect: str
     effect_ev: float
+    crab_pile: Literal["a", "b"] | None = None  # best card to take with crabs
+    crab_card_id: str | None = None
+    steal_from: str | None = None  # best opponent to steal from
 
 
 class EndRoundAdvice(BaseModel):
@@ -101,7 +104,12 @@ def _next_draw(names: Counter[CardName], colors: Counter[Color], deck: Dist) -> 
     return _best_of_two({k: float(_gain(names, colors, base, k, None)) for k in deck}, deck)
 
 
-def card_value(names: Counter[CardName], colors: Counter[Color], deck: Dist, name: CardName, color: Color | None) -> float:
+def card_value(names: Counter[CardName], colors: Counter[Color], deck: Dist, name: CardName, color: Color | None,
+               *, from_deck: bool) -> float:
+    """Gain now + expected best gain of the next deck draw. A card taken from the deck leaves it first,
+    so the lookahead can't imagine more copies of a card than exist."""
+    if from_deck:
+        deck = {k: v - (k == name) for k, v in deck.items() if v - (k == name) > 0}
     base = score_counts(names, colors)
     g = _gain(names, colors, base, name, color)
     names[name] += 1
@@ -115,7 +123,7 @@ def card_value(names: Counter[CardName], colors: Counter[Color], deck: Dist, nam
 
 
 def _deck_value(names: Counter[CardName], colors: Counter[Color], deck: Dist) -> float:
-    return _best_of_two({k: card_value(names, colors, deck, k, None) for k in deck}, deck)
+    return _best_of_two({k: card_value(names, colors, deck, k, None, from_deck=True) for k in deck}, deck)
 
 
 # ---------------------------------------------------------------- phases
@@ -129,14 +137,15 @@ def draw_options(state: GameState, deck: Dist) -> list[DrawOption]:
     for pile in ("a", "b"):
         top = state.discard_ledger.top(pile)  # type: ignore[arg-type]
         if top:
-            opts.append(DrawOption(source=pile, card=top, ev=round(card_value(names, colors, deck, top.name, top.color), 3)))  # type: ignore[arg-type]
+            opts.append(DrawOption(source=pile, card=top, ev=round(card_value(names, colors, deck, top.name, top.color, from_deck=False), 3)))  # type: ignore[arg-type]
     return opts
 
 
 def keep_advice(state: GameState, first: Card, second: Card) -> KeepAdvice:
     deck = OpponentBeliefTracker(state).deck
     names, colors = counts(all_cards(state.hero))
-    v = (card_value(names, colors, deck, first.name, first.color), card_value(names, colors, deck, second.name, second.color))
+    v = (card_value(names, colors, deck, first.name, first.color, from_deck=True),
+         card_value(names, colors, deck, second.name, second.color, from_deck=True))
     return KeepAdvice(keep_index=0 if v[0] >= v[1] else 1, values=(round(v[0], 3), round(v[1], 3)))
 
 
@@ -147,26 +156,29 @@ def duo_options(state: GameState, beliefs: OpponentBeliefTracker) -> list[DuoOpt
     names, colors = counts(all_cards(hero))
     out: list[DuoOption] = []
     if hand["crab"] >= 2:
-        pile_cards = state.discard_ledger.pile("a") + state.discard_ledger.pile("b")
-        ev = max((card_value(names, colors, deck, c.name, c.color) for c in pile_cards), default=0.0)
-        out.append(DuoOption(duo="crab", effect="take any card from a discard pile", effect_ev=round(ev, 3)))
+        scored = [(card_value(names, colors, deck, c.name, c.color, from_deck=False), pile, c.id)
+                  for pile in ("a", "b") for c in state.discard_ledger.pile(pile)]  # type: ignore[arg-type]
+        ev, pile, card_id = max(scored, default=(0.0, None, None))
+        out.append(DuoOption(duo="crab", effect="take any card from a discard pile", effect_ev=round(ev, 3),
+                             crab_pile=pile, crab_card_id=card_id))  # type: ignore[arg-type]
     if hand["boat"] >= 2:
         ev = max((o.ev for o in draw_options(state, deck)), default=0.0)
         out.append(DuoOption(duo="boat", effect="take another turn", effect_ev=round(ev, 3)))
     if hand["fish"] >= 2:
         total = sum(deck.values())
-        ev = sum(n / total * card_value(names, colors, deck, k, None) for k, n in deck.items()) if total else 0.0
+        ev = sum(n / total * card_value(names, colors, deck, k, None, from_deck=True) for k, n in deck.items()) if total else 0.0
         out.append(DuoOption(duo="fish", effect="draw the top deck card", effect_ev=round(ev, 3)))
     if hand["shark"] >= 1 and hand["swimmer"] >= 1:
-        best = 0.0
+        targets: list[tuple[float, str]] = []
         for p in state.opponents:
             if p.hand_size == 0:
                 continue
-            seen = sum(card_value(names, colors, deck, c.name, c.color) for c in p.known_hand)
+            seen = sum(card_value(names, colors, deck, c.name, c.color, from_deck=False) for c in p.known_hand)
             slot = beliefs.slots[p.player_id]
-            unseen = p.unknown_count * sum(w * card_value(names, colors, deck, k, None) for k, w in slot.items())
-            best = max(best, (seen + unseen) / p.hand_size)
-        out.append(DuoOption(duo="shark", effect="steal a random card from an opponent", effect_ev=round(best, 3)))
+            unseen = p.unknown_count * sum(w * card_value(names, colors, deck, k, None, from_deck=True) for k, w in slot.items())
+            targets.append(((seen + unseen) / p.hand_size, p.player_id))
+        best, victim = max(targets, default=(0.0, None))
+        out.append(DuoOption(duo="shark", effect="steal a random card from an opponent", effect_ev=round(best, 3), steal_from=victim))
     return out
 
 
