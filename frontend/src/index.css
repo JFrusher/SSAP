@@ -2,5 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
-body { padding-bottom: env(safe-area-inset-bottom); }
+@layer base {
+  html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+  body {
+    @apply bg-paper font-sans text-ink antialiased;
+    padding-bottom: env(safe-area-inset-bottom);
+    /* faint paper grain */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .3 0 0 0 0 .22 0 0 0 .06 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  :focus-visible { outline: 2px solid theme("colors.navy"); outline-offset: 2px; }
+}
+
+@layer components {
+  /* a sheet of paper: flat, hairline edge, soft contact shadow */
+  .paper { @apply rounded-[3px] border border-crease bg-sheet; box-shadow: 0 1px 0 rgba(31, 29, 26, 0.06), 0 6px 14px -10px rgba(31, 29, 26, 0.35); }
+  /* folded top-right corner: the flap is a darker triangle over a clipped corner */
+  .folded { position: relative; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%); }
+  .folded::after {
+    content: ""; position: absolute; top: 0; right: 0; width: 14px; height: 14px;
+    background: linear-gradient(225deg, transparent 50%, #E2D8C5 50%); box-shadow: -1px 1px 2px rgba(31, 29, 26, 0.18);
+  }
+  /* printed button: hard offset shadow that presses in */
+  .btn-print {
+    @apply flex min-h-14 w-full items-center justify-center gap-2 rounded-[3px] border-2 border-ink px-4 text-base font-semibold;
+    box-shadow: 3px 3px 0 #1F1D1A; transition: transform 90ms ease-out, box-shadow 90ms ease-out;
+  }
+  .btn-print:active:not(:disabled) { transform: translate(3px, 3px); box-shadow: 0 0 0 #1F1D1A; }
+  .btn-print:disabled { @apply cursor-not-allowed opacity-35; box-shadow: none; }
+  .stamp { @apply inline-block rotate-[-3deg] border-2 border-vermilion px-1.5 font-serif text-xs font-bold uppercase tracking-wider text-vermilion; }
+  .crease-x { background-image: linear-gradient(90deg, transparent, rgba(31, 29, 26, 0.12), transparent); height: 1px; }
+}
+
+@keyframes unfold {
+  from { transform: perspective(900px) rotateX(-14deg) translateY(28px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes flip-in {
+  from { transform: perspective(500px) rotateY(-70deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.anim-unfold { animation: unfold 200ms cubic-bezier(0.2, 0.7, 0.2, 1) both; transform-origin: bottom center; }
+.anim-flip { animation: flip-in 180ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .anim-unfold, .anim-flip { animation: none; }
+  .btn-print { transition: none; }
+}

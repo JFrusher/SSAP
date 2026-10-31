@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Layers } from "lucide-react";
 import { pileCards } from "../cards";
 import type { GameState, Pile } from "../types";
 import { CardChip } from "./CardChip";
@@ -10,16 +9,24 @@ interface Props {
   highlight: "deck" | Pile | null;
 }
 
+const Stamp = () => <span className="stamp absolute -top-2 right-1 z-10 bg-sheet">best</span>;
+
 export function Table({ state, highlight }: Props) {
   const [open, setOpen] = useState<Pile | null>(null);
-  const ring = (k: "deck" | Pile) => (highlight === k ? "ring-2 ring-amber-400" : "");
 
   return (
-    <section className="grid grid-cols-3 gap-2">
-      <div className={`flex flex-col items-center justify-center rounded-2xl bg-sky-950/60 p-2 ${ring("deck")}`}>
-        <Layers className="text-sky-300" />
-        <span className="text-3xl font-bold">{state.deck_count}</span>
-        <span className="text-xs text-sky-300">in deck</span>
+    <section className="grid grid-cols-3 gap-3" aria-label="Table">
+      <div className="relative flex flex-col items-center justify-end gap-1">
+        {highlight === "deck" && <Stamp />}
+        <div className="relative h-28 w-20" aria-hidden="true">
+          {/* a stack of face-down sheets */}
+          <div className="paper absolute inset-0 translate-x-1 translate-y-1" />
+          <div className="paper absolute inset-0 translate-x-0.5 translate-y-0.5" />
+          <div className="paper absolute inset-0 grid place-items-center bg-[repeating-linear-gradient(45deg,#E9E1D0_0_6px,#F3EDE1_6px_12px)]">
+            <span className="rounded-[2px] bg-sheet px-2 font-serif text-3xl font-bold">{state.deck_count}</span>
+          </div>
+        </div>
+        <span className="text-xs font-semibold text-ink-soft">Deck</span>
       </div>
       {(["a", "b"] as Pile[]).map((p) => {
         const cards = pileCards(state, p);
@@ -29,15 +36,19 @@ export function Table({ state, highlight }: Props) {
             key={p}
             type="button"
             onClick={() => setOpen(p)}
-            className={`flex flex-col items-center gap-1 rounded-2xl bg-sky-950/60 p-2 active:bg-sky-900 ${ring(p)}`}
+            aria-label={`Discard pile ${p.toUpperCase()}, ${cards.length} cards. Show all`}
+            className="relative flex flex-col items-center justify-end gap-1"
           >
-            {top ? <CardChip card={top} size="lg" /> : <div className="flex h-24 w-16 items-center justify-center rounded-xl border-2 border-dashed border-white/20 text-xs text-white/40">empty</div>}
-            <span className="text-xs text-sky-300">Pile {p.toUpperCase()} · {cards.length}</span>
+            {highlight === p && <Stamp />}
+            {top ? <CardChip key={top.id} card={top} size="lg" /> : (
+              <div className="grid h-28 w-20 place-items-center rounded-[3px] border-2 border-dashed border-crease text-xs text-ink-soft">empty</div>
+            )}
+            <span className="text-xs font-semibold text-ink-soft">Pile {p.toUpperCase()} · {cards.length}</span>
           </button>
         );
       })}
       {open && (
-        <Sheet title={`Discard pile ${open.toUpperCase()} (top first)`} onClose={() => setOpen(null)}>
+        <Sheet title={`Pile ${open.toUpperCase()}, top first`} onClose={() => setOpen(null)}>
           <div className="flex flex-wrap gap-2">
             {[...pileCards(state, open)].reverse().map((c) => <CardChip key={c.id} card={c} />)}
           </div>
