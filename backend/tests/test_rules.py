@@ -171,3 +171,16 @@ def test_lookahead_ignores_float_dust_in_deck_estimates() -> None:
     deck = {"sailor": 1.0000000001, "crab": 5.0}
     v = card_value(Counter({"sailor": 1}), Counter({"pink": 1}), deck, "sailor", None, from_deck=True)
     assert v >= 5
+
+
+def test_discard_advice_buries_a_card_the_next_opponent_wants() -> None:
+    from backend.solver.ev_calculator import keep_advice
+
+    s = _hero_with(["shell"]).model_copy(update={"phase": "draw"})
+    crab_held = c("crab")
+    opp = s.player("p1").model_copy(update={"known_hand": [crab_held], "hand_size": 1})
+    ledger = DiscardLedger().record_in("a", c("crab"), None).record_in("b", c("shoal"), None)
+    s = s.model_copy(update={"players": [s.hero, opp], "discard_ledger": ledger, "deck_count": s.deck_count - 1})
+    advice = keep_advice(s, c("lighthouse"), c("captain"))  # whichever is discarded is worthless to p1
+    assert advice.discard_pile == "a"  # covering the crab denies p1 a pair
+    assert advice.pile_risk["a"] < advice.pile_risk["b"]

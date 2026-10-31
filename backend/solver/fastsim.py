@@ -25,6 +25,10 @@ def value(cards: list[FCard], card: FCard) -> float:
     """Points now + half of what a second copy would add (same opponent model as the particle filter)."""
     base = points(cards)
     nxt = cards + [card]
+    if sum(c[0] == card[0] for c in nxt) > DECK_COMPOSITION[card[0]]:
+        # shortcut: a sampled hand can include a copy of a card the hero has just drawn but not yet recorded;
+        # such a hand can't gain it, so it is worth 0. Upgrade by conditioning samples on the drawn cards.
+        return 0.0
     now = points(nxt)
     if sum(c[0] == card[0] for c in nxt) + 1 > DECK_COMPOSITION[card[0]]:
         return now - base

@@ -61,7 +61,10 @@ export function RecommendationPanel({ state, rec }: { state: GameState; rec: Rec
         </div>
       )}
 
-      {heroTurn && state.phase === "play_duo" && !rec.end_round && (!rec.duos || rec.duos.length === 0) && (
+      {heroTurn && state.phase === "play_duo" && state.extra_turn_pending && (
+        <p className="mt-2 rounded-xl bg-sky-500/20 px-3 py-2 text-sm">⛵⛵ Boats played: tap <b>Extra turn</b> to draw again.</p>
+      )}
+      {heroTurn && state.phase === "play_duo" && !state.extra_turn_pending && !rec.end_round && (!rec.duos || rec.duos.length === 0) && (
         <p className="text-sm text-white/70">No duo to play. End your turn.</p>
       )}
     </section>

@@ -101,8 +101,8 @@ class GreedyBot:
         return max(opts, key=lambda o: o.ev).source
 
     def choose_keep(self, view: GameState, first: Card, second: Card, rng: random.Random) -> tuple[int, Pile]:
-        # shortcut: the engine has no discard-pile advice yet, so the pile is random among legal ones.
-        return keep_advice(view, first, second, lambda _: self.beliefs(view)).keep_index, rng.choice(discard_piles(view))
+        advice = keep_advice(view, first, second, lambda _: self.beliefs(view))
+        return advice.keep_index, advice.discard_pile
 
     def choose_duo(self, view: GameState, rng: random.Random) -> DuoChoice | None:
         opts = duo_options(view, self.beliefs(view))
@@ -131,6 +131,17 @@ class LearnedBetaBot(GreedyBot):
 
     name = "learned"
     factory = staticmethod(learned_beta)  # type: ignore[assignment]
+
+
+class CallSearchBot(GreedyBot):
+    """Greedy play, but Stop / Last Chance / keep playing is decided by search valued by P(win game)."""
+
+    name = "callsearch"
+
+    def choose_call(self, view: GameState, rng: random.Random) -> Call:
+        if not can_call(view):
+            return None
+        return ismcts.best(ismcts.search(view, evaluate=ismcts.win_value))[1]
 
 
 class IsmctsBot:
@@ -180,4 +191,4 @@ class IsmctsWinBot(IsmctsBot):
     evaluate = staticmethod(ismcts.win_value)  # type: ignore[assignment]
 
 
-BOTS: dict[str, type] = {"random": RandomBot, "greedy": GreedyBot, "particle": ParticleGreedyBot, "ismcts": IsmctsBot, "ismcts_win": IsmctsWinBot, "learned": LearnedBetaBot}
+BOTS: dict[str, type] = {"random": RandomBot, "greedy": GreedyBot, "particle": ParticleGreedyBot, "ismcts": IsmctsBot, "ismcts_win": IsmctsWinBot, "learned": LearnedBetaBot, "callsearch": CallSearchBot}

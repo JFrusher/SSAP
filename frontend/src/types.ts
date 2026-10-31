@@ -99,4 +99,9 @@ export interface Recommendation {
   opponents: OpponentView[];
 }
 export interface StateResponse { state: GameState; recommendation: Recommendation | null }
-export interface KeepAdvice { keep_index: 0 | 1; values: [number, number] }
+export interface KeepAdvice {
+  keep_index: 0 | 1;
+  values: [number, number];
+  discard_pile: Pile;
+  pile_risk: Partial<Record<Pile, number>>;
+}

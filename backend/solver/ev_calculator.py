@@ -17,10 +17,13 @@ from collections.abc import Callable
 from typing import Protocol
 
 from backend.engine.belief_tracker import Dist, OpponentBeliefTracker
+from backend.engine.particle_belief import DECK_OPTION_VALUE
+from backend.solver import fastsim
 from backend.engine.models import DECK_COMPOSITION, END_ROUND_MIN_POINTS, NON_WHITE_COLORS, Card, CardName, Color, GameState
 from backend.engine.rules import all_cards, color_bonus_counts, counts, score_counts
 
 SIMULATIONS = 300
+DENIAL_SAMPLES = 60
 
 
 class Beliefs(Protocol):
@@ -72,6 +75,8 @@ class OpponentView(BaseModel):
 class KeepAdvice(BaseModel):
     keep_index: int
     values: tuple[float, float]
+    discard_pile: Literal["a", "b"]  # where the other card does least for the next opponent
+    pile_risk: dict[str, float]  # next opponent's expected best gain from the discard tops, per pile choice
 
 
 class Recommendation(BaseModel):
@@ -160,11 +165,34 @@ def draw_options(state: GameState, deck: Dist) -> list[DrawOption]:
 
 
 def keep_advice(state: GameState, first: Card, second: Card, beliefs: BeliefFactory | None = None) -> KeepAdvice:
-    deck = (beliefs or BELIEFS)(state).deck
+    b = (beliefs or BELIEFS)(state)
     names, colors = counts(all_cards(state.hero))
-    v = (card_value(names, colors, deck, first.name, first.color, from_deck=True),
-         card_value(names, colors, deck, second.name, second.color, from_deck=True))
-    return KeepAdvice(keep_index=0 if v[0] >= v[1] else 1, values=(round(v[0], 3), round(v[1], 3)))
+    v = (card_value(names, colors, b.deck, first.name, first.color, from_deck=True),
+         card_value(names, colors, b.deck, second.name, second.color, from_deck=True))
+    keep = 0 if v[0] >= v[1] else 1
+    pile, risk = discard_advice(state, (first, second)[1 - keep], b)
+    return KeepAdvice(keep_index=keep, values=(round(v[0], 3), round(v[1], 3)), discard_pile=pile, pile_risk=risk)
+
+
+def discard_advice(state: GameState, discarded: Card, beliefs: Beliefs) -> tuple[Literal["a", "b"], dict[str, float]]:
+    """Pick the pile that leaves the next opponent the least to take: discarding on a pile both offers the
+    discarded card and buries that pile's current top. Their gain uses the same card valuation as the
+    opponent model (points now + set potential), averaged over hands sampled from the belief model."""
+    ids = [p.player_id for p in state.players]
+    nxt = ids[(ids.index(state.hero_id) + 1) % len(ids)]
+    ledger = state.discard_ledger
+    legal = [p for p in ("a", "b") if ledger.top(p) is None] or ["a", "b"]  # type: ignore[arg-type]
+    rng = random.Random(state.round_number * 31 + len(state.log))
+    hands = []
+    for _ in range(DENIAL_SAMPLES):
+        n, c = beliefs.sample_hidden(rng)[0][nxt]
+        hands.append(list(zip(sorted(n.elements()), c.elements())))  # shortcut: colours paired arbitrarily; only mermaid scoring reads them
+    risk: dict[str, float] = {}
+    for pile in legal:
+        tops = [t for t in (discarded if q == pile else ledger.top(q) for q in ("a", "b")) if t]  # type: ignore[arg-type]
+        risk[pile] = round(sum(max(DECK_OPTION_VALUE, *(fastsim.value(h, (t.name, t.color)) for t in tops))
+                               for h in hands) / len(hands), 3)
+    return min(legal, key=lambda p: risk[p]), risk  # type: ignore[return-value]
 
 
 def duo_options(state: GameState, beliefs: Beliefs) -> list[DuoOption]:
