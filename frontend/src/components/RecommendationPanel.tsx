@@ -34,7 +34,7 @@ export function RecommendationPanel({ state, rec }: { state: GameState; rec: Rec
         </div>
       )}
 
-      {rec.draw && (
+      {rec.draw && !rec.search && (
         <ol className="space-y-1.5">
           {[...rec.draw].sort((a, b) => Number(b.source === rec.best_draw) - Number(a.source === rec.best_draw) || b.ev - a.ev).map((o) => {
             const best = o.source === rec.best_draw;
@@ -53,7 +53,7 @@ export function RecommendationPanel({ state, rec }: { state: GameState; rec: Rec
           })}
         </ol>
       )}
-      {rec.draw && <p className="mt-1.5 text-xs text-ink-soft">Expected points from this draw and your next one.</p>}
+      {rec.draw && !rec.search && <p className="mt-1.5 text-xs text-ink-soft">Expected points from this draw and your next one.</p>}
 
       {rec.duos && rec.duos.length > 0 && (
         <ul className="space-y-1.5">
