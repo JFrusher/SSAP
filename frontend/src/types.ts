@@ -97,6 +97,8 @@ export interface Recommendation {
   duos: DuoOption[] | null;
   end_round: EndRoundAdvice | null;
   opponents: OpponentView[];
+  search: Record<string, number> | null; // action -> expected round margin vs the best opponent
+  search_best: string | null;
 }
 export interface StateResponse { state: GameState; recommendation: Recommendation | null }
 export interface KeepAdvice {

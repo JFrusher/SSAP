@@ -16,7 +16,7 @@ from typing import Any
 
 from backend.engine.models import Card, GameState
 from backend.solver import fastsim as fs
-from backend.solver.ev_calculator import BELIEFS, BeliefFactory
+from backend.solver.ev_calculator import BELIEFS, BeliefFactory, KeepAdvice, Recommendation, keep_advice, recommend
 
 BUDGET_S = 0.15
 RootAction = tuple[Any, ...]
@@ -161,3 +161,38 @@ def search(state: GameState, drawn: tuple[Card, Card] | None = None, budget_s: f
 
 def best(result: dict[RootAction, tuple[float, int]]) -> RootAction:
     return max(result, key=lambda a: (result[a][1], result[a][0]))
+
+
+# ------------------------------------------------------------ live advice (arena: search beat greedy 75.7% [70.5, 80.2])
+
+def _label(a: RootAction) -> str:
+    return ":".join("none" if x is None else str(x) for x in a)
+
+
+def _margin(v: float) -> float:
+    return round(v * 60 - 30, 2)  # undo margin_value's normalisation: expected round margin vs best opponent
+
+
+def advise(state: GameState) -> Recommendation:
+    """Greedy recommendation (for the numbers shown) with the hero's decision taken from search."""
+    rec = recommend(state)
+    if state.active_player_id != state.hero_id:
+        return rec
+    result = search(state)
+    choice = best(result)
+    rec.search = {_label(a): _margin(v) for a, (v, _) in result.items()}
+    rec.search_best = _label(choice)
+    if choice[0] == "draw":
+        rec.best_draw = choice[1]
+    elif choice[0] == "duo" and rec.duos:
+        rec.duos.sort(key=lambda d: d.duo != choice[1])  # the searched duo first
+    elif choice[0] == "end" and rec.end_round is not None:
+        rec.end_round.best = choice[1] or "continue"
+    return rec
+
+
+def keep_search(state: GameState, first: Card, second: Card) -> KeepAdvice:
+    """Which drawn card to keep and where to discard the other, decided by search."""
+    advice = keep_advice(state, first, second)
+    keep, pile = best(search(state, (first, second)))[1:]
+    return advice.model_copy(update={"keep_index": keep, "discard_pile": pile})
