@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowDownToLine, Flag, Hand as HandIcon, Layers, Play, Siren } from "lucide-react";
+import { ArrowDownToLine, Flag, Hand as HandIcon, Layers, Play, Sailboat, Siren } from "lucide-react";
 import { EMOJI, pileCards, unseenCounts } from "../cards";
 import type { Game } from "../hooks/useGame";
 import type { Action, Card, CardName, GameState, KeepAdvice, Pile, PlayerState } from "../types";
@@ -29,6 +29,8 @@ export function Actions({ game, state }: { game: Game; state: GameState }) {
   const [flow, setFlow] = useState<Flow>(null);
   const active = state.players.find((p) => p.player_id === state.active_player_id)!;
   const heroTurn = active.player_id === state.hero_id;
+  // Opponents' points are hidden, so only the hero's 7-point minimum can be checked here.
+  const canCall = state.last_chance_caller === null && (!heroTurn || (game.rec?.hero_points ?? 0) >= 7);
   const done = async (a: Action) => {
     if (await game.dispatch(a)) setFlow(null);
   };
@@ -56,12 +58,12 @@ export function Actions({ game, state }: { game: Game; state: GameState }) {
           </BigButton>
           <div className="grid grid-cols-3 gap-2">
             <BigButton tone="primary" onClick={() => done({ kind: "end_turn", call: null })}>
-              <HandIcon size={18} /> End turn
+              {state.extra_turn_pending ? <><Sailboat size={18} /> Extra turn</> : <><HandIcon size={18} /> End turn</>}
             </BigButton>
-            <BigButton tone="danger" onClick={() => done({ kind: "end_turn", call: "stop" })} disabled={state.last_chance_caller !== null}>
+            <BigButton tone="danger" onClick={() => done({ kind: "end_turn", call: "stop" })} disabled={!canCall}>
               <Flag size={18} /> Stop
             </BigButton>
-            <BigButton tone="danger" onClick={() => done({ kind: "end_turn", call: "last_chance" })} disabled={state.last_chance_caller !== null}>
+            <BigButton tone="danger" onClick={() => done({ kind: "end_turn", call: "last_chance" })} disabled={!canCall}>
               <Siren size={18} /> Last chance
             </BigButton>
           </div>
@@ -86,7 +88,13 @@ export function Actions({ game, state }: { game: Game; state: GameState }) {
 
 // ---------------------------------------------------------------- draw from deck
 
-function ChoosePile({ state, title, onPick, onClose }: { state: GameState; title: string; onPick: (p: Pile) => void; onClose: () => void }) {
+function ChoosePile({ state, title, advice, onPick, onClose }: {
+  state: GameState;
+  title: string;
+  advice?: { pile: Pile; risk: Partial<Record<Pile, number>> };
+  onPick: (p: Pile) => void;
+  onClose: () => void;
+}) {
   const forced = emptyPiles(state);
   useEffect(() => {
     if (forced.length === 1) onPick(forced[0]);
@@ -96,9 +104,16 @@ function ChoosePile({ state, title, onPick, onClose }: { state: GameState; title
     <Sheet title={title} onClose={onClose}>
       <div className="grid grid-cols-2 gap-2">
         {(["a", "b"] as Pile[]).map((p) => (
-          <BigButton key={p} onClick={() => onPick(p)}>Pile {p.toUpperCase()}</BigButton>
+          <div key={p} className="flex flex-col items-center gap-1">
+            <BigButton tone={advice?.pile === p ? "primary" : "default"} onClick={() => onPick(p)}>Pile {p.toUpperCase()}</BigButton>
+            {advice && advice.risk[p] !== undefined && (
+              <span className="text-xs text-white/70">next player gains ~{advice.risk[p]!.toFixed(2)}</span>
+            )}
+            {advice?.pile === p && <span className="text-xs font-bold text-amber-300">Recommended</span>}
+          </div>
         ))}
       </div>
+      {advice && <p className="mt-3 text-xs text-white/50">Discarding buries that pile's top card. The recommended pile leaves the next player the least to take.</p>}
     </Sheet>
   );
 }
@@ -146,6 +161,7 @@ function HeroDeckFlow({ game, state, onDone, onClose }: { game: Game; state: Gam
     <ChoosePile
       state={state}
       title={`Discard ${EMOJI[discarded.name]} onto…`}
+      advice={advice && advice.keep_index === keep ? { pile: advice.discard_pile, risk: advice.pile_risk } : undefined}
       onPick={(p) => onDone({ kind: "draw_deck", kept: drawn[keep], discarded, pile: p })}
       onClose={onClose}
     />
@@ -251,7 +267,7 @@ function DuoFlow({ state, duo, onDone, onClose }: { state: GameState; duo: Duo; 
     if (piles.length === 0) return <Confirm label="Both piles are empty: no effect" onConfirm={() => onDone(base)} onClose={onClose} />;
     if (!crabPile) {
       return (
-        <Sheet title="Which pile did they search?" onClose={onClose}>
+        <Sheet title={isHero ? "Which pile do you search?" : "Which pile did they search?"} onClose={onClose}>
           <div className="grid grid-cols-2 gap-2">
             {piles.map((p) => <BigButton key={p} onClick={() => setCrabPile(p)}>Pile {p.toUpperCase()}</BigButton>)}
           </div>
