@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowDownToLine, Flag, Hand as HandIcon, Layers, Play, Sailboat, Siren } from "lucide-react";
-import { EMOJI, pileCards, unseenCounts } from "../cards";
+import { LABEL, pileCards, unseenCounts } from "../cards";
 import type { Game } from "../hooks/useGame";
 import type { Action, Card, CardName, GameState, KeepAdvice, Pile, PlayerState } from "../types";
 import { CardChip } from "./CardChip";
@@ -11,7 +11,7 @@ type Duo = "crab" | "boat" | "fish" | "shark";
 const DUO_CARDS: Record<Duo, [CardName, CardName]> = {
   crab: ["crab", "crab"], boat: ["boat", "boat"], fish: ["fish", "fish"], shark: ["shark", "swimmer"],
 };
-const DUO_LABEL: Record<Duo, string> = { crab: "🦀🦀 Crabs", boat: "⛵⛵ Boats", fish: "🐟🐟 Fish", shark: "🦈🏊 Shark + Swimmer" };
+const DUO_LABEL: Record<Duo, string> = { crab: "Two crabs", boat: "Two boats", fish: "Two fish", shark: "Shark + swimmer" };
 
 type Flow = { k: "heroDeck" } | { k: "oppDeck" } | { k: "duo"; duo: Duo } | { k: "pickDuo" } | null;
 
@@ -107,13 +107,13 @@ function ChoosePile({ state, title, advice, onPick, onClose }: {
           <div key={p} className="flex flex-col items-center gap-1">
             <BigButton tone={advice?.pile === p ? "primary" : "default"} onClick={() => onPick(p)}>Pile {p.toUpperCase()}</BigButton>
             {advice && advice.risk[p] !== undefined && (
-              <span className="text-xs text-white/70">next player gains ~{advice.risk[p]!.toFixed(2)}</span>
+              <span className="text-xs text-ink-soft">next player gains ~{advice.risk[p]!.toFixed(2)}</span>
             )}
-            {advice?.pile === p && <span className="text-xs font-bold text-amber-300">Recommended</span>}
+            {advice?.pile === p && <span className="stamp">advised</span>}
           </div>
         ))}
       </div>
-      {advice && <p className="mt-3 text-xs text-white/50">Discarding buries that pile's top card. The recommended pile leaves the next player the least to take.</p>}
+      {advice && <p className="mt-3 text-xs text-ink-soft">Discarding buries that pile's top card. The recommended pile leaves the next player the least to take.</p>}
     </Sheet>
   );
 }
@@ -149,7 +149,7 @@ function HeroDeckFlow({ game, state, onDone, onClose }: { game: Game; state: Gam
             <div key={c.id} className="flex flex-col items-center gap-2">
               <CardChip card={c} size="lg" selected={advice?.keep_index === i} onClick={() => setKeep(i as 0 | 1)} />
               <span className="text-sm tabular-nums">{advice ? `${advice.values[i].toFixed(2)} EV` : "…"}</span>
-              {advice?.keep_index === i && <span className="text-xs font-bold text-amber-300">Recommended</span>}
+              {advice?.keep_index === i && <span className="stamp">keep</span>}
             </div>
           ))}
         </div>
@@ -160,7 +160,7 @@ function HeroDeckFlow({ game, state, onDone, onClose }: { game: Game; state: Gam
   return (
     <ChoosePile
       state={state}
-      title={`Discard ${EMOJI[discarded.name]} onto…`}
+      title={`Discard the ${LABEL[discarded.name].toLowerCase()} onto…`}
       advice={advice && advice.keep_index === keep ? { pile: advice.discard_pile, risk: advice.pile_risk } : undefined}
       onPick={(p) => onDone({ kind: "draw_deck", kept: drawn[keep], discarded, pile: p })}
       onClose={onClose}
@@ -180,7 +180,7 @@ function OppDeckFlow({ state, onDone, onClose }: { state: GameState; onDone: (a:
   return (
     <ChoosePile
       state={state}
-      title={`They discarded ${EMOJI[discarded.name]} onto…`}
+      title={`They discarded a ${LABEL[discarded.name].toLowerCase()} onto…`}
       onPick={(p) => onDone({ kind: "draw_deck", kept: null, discarded, pile: p })}
       onClose={onClose}
     />
@@ -239,7 +239,7 @@ function DuoFlow({ state, duo, onDone, onClose }: { state: GameState; duo: Duo; 
     return (
       <ChooseCard
         key={cards.length}
-        title={`${player.name}'s ${EMOJI[name]} card`}
+        title={`${player.name}'s ${LABEL[name].toLowerCase()}`}
         cards={matching(name, cards)}
         unseen={{ remaining: unseenCounts(state, cards), only: [name] }}
         onPick={(c) => setCards([...cards, c])}

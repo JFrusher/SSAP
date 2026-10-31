@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { CARD_NAMES, COLORS, EMOJI, LABEL, SWATCH, colorLabel, newCard } from "../cards";
+import { CARD_NAMES, COLORS, LABEL, colorLabel, newCard } from "../cards";
 import type { Card, CardName } from "../types";
+import { CardArt } from "./CardArt";
 import { Sheet } from "./Sheet";
 
 interface Props {
@@ -28,11 +29,11 @@ export function CardPicker({ title, remaining, only, onPick, onClose }: Props) {
               type="button"
               disabled={remaining[n] <= 0}
               onClick={() => chooseName(n)}
-              className="flex h-20 flex-col items-center justify-center rounded-2xl bg-white/10 active:bg-white/25 disabled:opacity-25"
+              className="paper flex h-[92px] flex-col items-center justify-center gap-0.5 px-1 active:translate-y-px disabled:opacity-30"
             >
-              <span className="text-3xl">{EMOJI[n]}</span>
-              <span className="mt-1 text-[11px] leading-tight">{LABEL[n]}</span>
-              <span className="text-[10px] text-sky-300">{remaining[n]} left</span>
+              <CardArt name={n} color={null} className="h-10 w-10" />
+              <span className="text-center text-[12px] font-semibold leading-tight">{LABEL[n]}</span>
+              <span className="text-[11px] text-ink-soft">{remaining[n]} left</span>
             </button>
           ))}
         </div>
@@ -45,15 +46,15 @@ export function CardPicker({ title, remaining, only, onPick, onClose }: Props) {
                 key={c}
                 type="button"
                 onClick={() => onPick(newCard(name, c))}
-                className="flex h-20 flex-col items-center justify-center gap-1 rounded-2xl bg-white/10 active:bg-white/25"
+                className="paper flex h-[84px] flex-col items-center justify-center gap-1 active:translate-y-px"
               >
-                <span className="h-9 w-9 rounded-full border-2 border-white/40" style={{ background: SWATCH[c] }} />
-                <span className="text-[10px] capitalize">{colorLabel(c)}</span>
+                <CardArt name={name} color={c} className="h-11 w-11" />
+                <span className="text-[11px] capitalize leading-none">{colorLabel(c)}</span>
               </button>
             ))}
           </div>
-          <button type="button" onClick={() => setName(null)} className="mt-3 w-full py-3 text-sky-300">
-            ← Back to card types
+          <button type="button" onClick={() => setName(null)} className="mt-3 min-h-11 w-full font-semibold text-navy underline underline-offset-4">
+            Back to card types
           </button>
         </>
       )}

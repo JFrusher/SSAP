@@ -10,13 +10,6 @@ export const COMPOSITION: Record<CardName, number> = {
 
 export const CARD_NAMES = Object.keys(COMPOSITION) as CardName[];
 
-export const EMOJI: Record<CardName, string> = {
-  crab: "🦀", boat: "⛵", fish: "🐟", shark: "🦈", swimmer: "🏊",
-  shell: "🐚", octopus: "🐙", penguin: "🐧", sailor: "🧑‍✈️",
-  lighthouse: "🗼", shoal: "🐠", colony: "🏘️", captain: "⚓",
-  mermaid: "🧜",
-};
-
 export const LABEL: Record<CardName, string> = {
   crab: "Crab", boat: "Boat", fish: "Fish", shark: "Shark", swimmer: "Swimmer",
   shell: "Shell", octopus: "Octopus", penguin: "Penguin", sailor: "Sailor",
