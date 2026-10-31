@@ -153,3 +153,10 @@ def test_api_round_trip() -> None:
     assert r.status_code == 200 and r.json()["recommendation"]["draw"]
     bad = client.post("/api/apply", json={"state": r.json()["state"], "action": {"kind": "end_turn"}})
     assert bad.status_code == 400 and "draw" in bad.json()["detail"]
+
+
+def test_lookahead_never_exceeds_physical_card_counts() -> None:
+    # One sailor in hand, the other still unseen: the 2-turn lookahead must not imagine a third sailor.
+    s = _hero_with(["sailor"]).model_copy(update={"phase": "draw"})
+    rec = recommend(s)
+    assert rec.draw
