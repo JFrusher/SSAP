@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowDownToLine, Flag, Hand as HandIcon, Layers, Play, Sailboat, Siren } from "lucide-react";
-import { LABEL, pileCards, unseenCounts } from "../cards";
+import { LABEL, pileCards, unseenCounts, type Remaining } from "../cards";
 import type { Game } from "../hooks/useGame";
 import type { Action, Card, CardName, GameState, KeepAdvice, Pile, PlayerState } from "../types";
 import { CardChip } from "./CardChip";
@@ -193,7 +193,7 @@ function OppDeckFlow({ state, onDone, onClose }: { state: GameState; onDone: (a:
 function ChooseCard({ title, cards, unseen, onPick, onClose }: {
   title: string;
   cards: Card[];
-  unseen: { remaining: Record<CardName, number>; only?: CardName[] } | null;
+  unseen: { remaining: Remaining; only?: CardName[] } | null;
   onPick: (c: Card) => void;
   onClose: () => void;
 }) {

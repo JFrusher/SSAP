@@ -28,7 +28,13 @@ DECK_COMPOSITION: dict[CardName, int] = {
     "mermaid": 4,
 }
 DECK_SIZE = sum(DECK_COMPOSITION.values())
+# From the ColorADD card in the box: how many cards of each colour the deck holds.
+COLOR_COMPOSITION: dict[Color, int] = {
+    "light_blue": 9, "dark_blue": 9, "yellow": 8, "black": 8, "green": 6, "white": 4,
+    "grey": 4, "purple": 4, "light_orange": 3, "pink": 2, "orange": 1,
+}
 assert DECK_SIZE == 58
+assert sum(COLOR_COMPOSITION.values()) == DECK_SIZE and COLOR_COMPOSITION["white"] == DECK_COMPOSITION["mermaid"]
 
 CARD_TYPES: dict[CardName, CardType] = {
     "crab": "duo", "boat": "duo", "fish": "duo", "shark": "duo", "swimmer": "duo",

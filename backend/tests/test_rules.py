@@ -83,15 +83,15 @@ def test_overcounting_is_rejected() -> None:
         apply_action(s, DrawDeck(kept=c("lighthouse"), discarded=c("crab"), pile="a"))
 
 
-def _hero_with(names: list[str]) -> GameState:
+def _hero_with(names: list[str], color: str | None = None) -> GameState:
     s = started()
-    hand = [c(n) for n in names]
+    hand = [c(n, color) for n in names]
     return s.model_copy(update={"players": [s.hero.model_copy(update={"known_hand": hand, "hand_size": len(hand)}), s.player("p1")],
                                 "deck_count": s.deck_count - len(hand), "phase": "play_duo"})
 
 
 def test_last_chance_bet_scoring() -> None:
-    s = _hero_with(["shell"] * 4 + ["crab", "crab"])  # 6 + 1 = 7 points, colour bonus 6
+    s = _hero_with(["shell"] * 4 + ["crab", "crab"], "dark_blue")  # 6 + 1 = 7 points, colour bonus 6
     s = apply_action(s, EndTurn(call="last_chance"))
     assert s.active_player_id == "p1" and s.last_chance_queue == []
     s = apply_action(s, TakeDiscard(pile="b"))  # opponent takes the fish
@@ -184,3 +184,35 @@ def test_discard_advice_buries_a_card_the_next_opponent_wants() -> None:
     advice = keep_advice(s, c("lighthouse"), c("captain"))  # whichever is discarded is worthless to p1
     assert advice.discard_pile == "a"  # covering the crab denies p1 a pair
     assert advice.pile_risk["a"] < advice.pile_risk["b"]
+
+
+def test_colour_totals_from_the_box_are_enforced() -> None:
+    s = started().model_copy(update={"phase": "draw"})
+    s = apply_action(s, DrawDeck(kept=c("crab", "orange"), discarded=c("boat", "pink"), pile="a"))
+    s = apply_action(s, EndTurn())
+    with pytest.raises(IllegalAction, match="orange"):  # the deck has a single orange card
+        apply_action(s, DrawDeck(discarded=c("fish", "orange"), pile="b"))
+
+
+def test_unseen_colours_are_drawn_from_what_is_left() -> None:
+    import random
+    from collections import Counter
+
+    from backend.engine.rules import draw_color
+
+    pool = Counter({"orange": 1, "white": 1})
+    assert draw_color(random.Random(0), "crab", pool) == "orange"
+    assert draw_color(random.Random(0), "mermaid", pool) == "white"
+    assert +pool == Counter()
+
+
+def test_arena_deck_matches_the_box() -> None:
+    import random
+    from collections import Counter
+
+    from backend.arena.sim import make_deck
+    from backend.engine.models import COLOR_COMPOSITION
+
+    deck = make_deck(random.Random(3))
+    assert Counter(card.color for card in deck) == Counter(COLOR_COMPOSITION)
+    assert all((card.name == "mermaid") == (card.color == "white") for card in deck)

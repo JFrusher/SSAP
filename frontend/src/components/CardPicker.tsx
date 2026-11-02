@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { CARD_NAMES, COLORS, LABEL, colorLabel, newCard } from "../cards";
+import { CARD_NAMES, COLORS, LABEL, colorLabel, newCard, type Remaining } from "../cards";
 import type { Card, CardName } from "../types";
 import { CardArt } from "./CardArt";
 import { Sheet } from "./Sheet";
 
 interface Props {
   title: string;
-  remaining: Record<CardName, number>;
+  remaining: Remaining;
   only?: CardName[];
   onPick: (card: Card) => void;
   onClose: () => void;
@@ -27,13 +27,13 @@ export function CardPicker({ title, remaining, only, onPick, onClose }: Props) {
             <button
               key={n}
               type="button"
-              disabled={remaining[n] <= 0}
+              disabled={remaining.names[n] <= 0}
               onClick={() => chooseName(n)}
               className="paper flex h-[92px] flex-col items-center justify-center gap-0.5 px-1 active:translate-y-px disabled:opacity-30"
             >
               <CardArt name={n} color={null} className="h-10 w-10" />
               <span className="text-center text-[12px] font-semibold leading-tight">{LABEL[n]}</span>
-              <span className="text-[11px] text-ink-soft">{remaining[n]} left</span>
+              <span className="text-[11px] text-ink-soft">{remaining.names[n]} left</span>
             </button>
           ))}
         </div>
@@ -46,10 +46,12 @@ export function CardPicker({ title, remaining, only, onPick, onClose }: Props) {
                 key={c}
                 type="button"
                 onClick={() => onPick(newCard(name, c))}
-                className="paper flex h-[84px] flex-col items-center justify-center gap-1 active:translate-y-px"
+                disabled={remaining.colors[c] <= 0}
+                className="paper flex h-[96px] flex-col items-center justify-center gap-0.5 px-0.5 active:translate-y-px disabled:opacity-30"
               >
                 <CardArt name={name} color={c} className="h-11 w-11" />
-                <span className="text-[11px] capitalize leading-none">{colorLabel(c)}</span>
+                <span className="text-center text-[11px] capitalize leading-tight">{colorLabel(c)}</span>
+                <span className="text-[10px] text-ink-soft">{remaining.colors[c]} left</span>
               </button>
             ))}
           </div>

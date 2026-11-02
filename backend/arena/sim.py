@@ -6,7 +6,7 @@ so bots see exactly what the live app would see and every move is consistency-ch
 import random
 from dataclasses import dataclass, field
 
-from backend.engine.models import DECK_COMPOSITION, NON_WHITE_COLORS, Card, CardName, Color, GameState, RoundResult
+from backend.engine.models import COLOR_COMPOSITION, DECK_COMPOSITION, Card, CardName, Color, GameState, RoundResult
 from backend.engine.rules import (
     Action, DrawDeck, EndTurn, PlayDuo, ResolveRound, StartRound, TakeDiscard, apply_action, new_game,
 )
@@ -17,13 +17,14 @@ MAX_ACTIONS_PER_ROUND = 400
 
 
 def make_deck(rng: random.Random) -> list[Card]:
-    # shortcut: real per-card colours are unknown, so each card gets a uniform random colour per game;
-    # upgrade by loading a measured colour table once colours have been logged from real games.
+    # The box gives colour totals, not which card has which colour, so colours are dealt at random
+    # over the non-mermaid cards with exactly those totals.
+    colors: list[Color] = [c for c, n in COLOR_COMPOSITION.items() if c != "white" for _ in range(n)]
+    rng.shuffle(colors)
     cards = []
     for name, n in DECK_COMPOSITION.items():
         for i in range(n):
-            color: Color = "white" if name == "mermaid" else rng.choice(NON_WHITE_COLORS)
-            cards.append(Card(id=f"{name}{i}", name=name, color=color))
+            cards.append(Card(id=f"{name}{i}", name=name, color="white" if name == "mermaid" else colors.pop()))
     rng.shuffle(cards)
     return cards
 
