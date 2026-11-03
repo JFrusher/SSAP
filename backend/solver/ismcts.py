@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.engine.models import Card, GameState
+from backend.engine.rules import draw_color, unseen_colors
 from backend.solver import fastsim as fs
 from backend.solver.ev_calculator import BELIEFS, BeliefFactory, KeepAdvice, Recommendation, keep_advice, recommend
 
@@ -62,6 +63,7 @@ def win_value(w: fs.World, reason: str, hero: int, state: GameState) -> float:
 
 def determinize(state: GameState, beliefs: Any, rng: random.Random) -> fs.World:
     hands_counts, pool = beliefs.sample_hidden(rng)
+    colors_left = unseen_colors(state)
     hands, played = [], []
     for p in state.players:
         known = [(c.name, c.color) for c in p.known_hand]
@@ -73,8 +75,8 @@ def determinize(state: GameState, beliefs: Any, rng: random.Random) -> fs.World:
         unseen.subtract(c.name for c in p.played_duos)
         unseen.subtract(c[0] for c in known)
         assert all(v >= 0 for v in unseen.values()), "belief sample contradicts a seen card"
-        hands.append(known + [(n, fs.random_color(rng, n)) for n in unseen.elements()])
-    deck = [(n, fs.random_color(rng, n)) for n in pool.elements()]
+        hands.append(known + [(n, draw_color(rng, n, colors_left)) for n in unseen.elements()])
+    deck = [(n, draw_color(rng, n, colors_left)) for n in pool.elements()]
     rng.shuffle(deck)
     seat = {p.player_id: i for i, p in enumerate(state.players)}
     piles = {k: [(c.name, c.color) for c in state.discard_ledger.pile(k)] for k in ("a", "b")}  # type: ignore[arg-type]

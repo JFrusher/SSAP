@@ -19,8 +19,8 @@ from typing import Protocol
 from backend.engine.belief_tracker import Dist, OpponentBeliefTracker
 from backend.engine.particle_belief import DECK_OPTION_VALUE
 from backend.solver import fastsim
-from backend.engine.models import DECK_COMPOSITION, END_ROUND_MIN_POINTS, NON_WHITE_COLORS, Card, CardName, Color, GameState
-from backend.engine.rules import all_cards, color_bonus_counts, counts, score_counts
+from backend.engine.models import DECK_COMPOSITION, END_ROUND_MIN_POINTS, Card, CardName, Color, GameState
+from backend.engine.rules import all_cards, color_bonus_counts, counts, draw_color, score_counts, unseen_colors
 
 SIMULATIONS = 300
 DENIAL_SAMPLES = 60
@@ -234,17 +234,14 @@ def duo_options(state: GameState, beliefs: Beliefs) -> list[DuoOption]:
 # ---------------------------------------------------------------- simulation
 
 
-def _random_color(rng: random.Random, name: CardName) -> Color:
-    return "white" if name == "mermaid" else rng.choice(NON_WHITE_COLORS)
-
-
-def _last_turn(names: Counter[CardName], colors: Counter[Color], state: GameState, remaining: Counter[CardName], rng: random.Random) -> int:
+def _last_turn(names: Counter[CardName], colors: Counter[Color], state: GameState, remaining: Counter[CardName],
+               colors_left: Counter[Color], rng: random.Random) -> int:
     """An opponent's final turn: best of a blind two-card draw or either discard top."""
     base = score_counts(names, colors)
     options: list[tuple[CardName, Color]] = []
     pool = list(remaining.elements())
     for name in rng.sample(pool, min(2, len(pool))):
-        options.append((name, _random_color(rng, name)))
+        options.append((name, draw_color(rng, name, colors_left)))
     for pile in ("a", "b"):
         top = state.discard_ledger.top(pile)  # type: ignore[arg-type]
         if top:
@@ -259,13 +256,15 @@ def simulate(state: GameState, beliefs: Beliefs) -> tuple[list[OpponentView], En
     hero_bonus = color_bonus_counts(hero_colors)
     opp_pts: dict[str, list[int]] = {p.player_id: [] for p in state.opponents}
     stop_m = lc_m = lc_wins = 0.0
+    # shortcut: last-turn draws use the unseen colours without removing those dealt into the sampled hands
+    colors_left = unseen_colors(state)
     for _ in range(SIMULATIONS):
         hands, remaining = beliefs.sample_hidden(rng)
         now = {pid: score_counts(*h) for pid, h in hands.items()}
         for pid, v in now.items():
             opp_pts[pid].append(v)
         stop_m += hero_pts - max(now.values())
-        after = {pid: _last_turn(*h, state, remaining, rng) for pid, h in hands.items()}
+        after = {pid: _last_turn(*h, state, remaining, Counter(colors_left), rng) for pid, h in hands.items()}
         bonus = {pid: color_bonus_counts(h[1]) for pid, h in hands.items()}
         if hero_pts >= max(after.values()):
             lc_wins += 1

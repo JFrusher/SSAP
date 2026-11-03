@@ -2,14 +2,19 @@ import itertools
 
 import pytest
 
-from backend.engine.models import Card
+from backend.engine.models import COLOR_COMPOSITION, Card
 from backend.engine.rules import card_points, color_bonus
 
 _ids = itertools.count()
 
 
-def c(name: str, color: str = "dark_blue") -> Card:
-    return Card(id=f"t{next(_ids)}", name=name, color="white" if name == "mermaid" else color)  # type: ignore[arg-type]
+# Default colours cycle through the deck's real colour multiset, so any test using up to 54 cards stays
+# within the box's colour totals.
+_palette = itertools.cycle([c for c, n in COLOR_COMPOSITION.items() if c != "white" for _ in range(n)])
+
+
+def c(name: str, color: str | None = None) -> Card:
+    return Card(id=f"t{next(_ids)}", name=name, color="white" if name == "mermaid" else color or next(_palette))  # type: ignore[arg-type]
 
 
 def cards(*names: str) -> list[Card]:

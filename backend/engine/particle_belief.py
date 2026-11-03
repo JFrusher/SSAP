@@ -12,8 +12,8 @@ from collections import Counter
 from dataclasses import dataclass
 
 from backend.engine.discard_ledger import IllegalAction
-from backend.engine.models import DECK_COMPOSITION, NON_WHITE_COLORS, Card, CardName, Color, GameState, LogEntry, Pile
-from backend.engine.rules import score_counts
+from backend.engine.models import COLOR_COMPOSITION, DECK_COMPOSITION, Card, CardName, Color, GameState, LogEntry, Pile
+from backend.engine.rules import draw_color, score_counts
 
 N_PARTICLES = 128
 BETA = 1.0  # fixed softmax rationality of opponents (phase 2)
@@ -37,7 +37,8 @@ class Particle:
 
 
 def _color(rng: random.Random, name: CardName) -> Color:
-    return "white" if name == "mermaid" else rng.choice(NON_WHITE_COLORS)
+    # shortcut: draws from the box's colour totals, not from the colours still unseen; fine while this model is not live.
+    return draw_color(rng, name, Counter(COLOR_COMPOSITION))
 
 
 def _score(hand: list[HandCard]) -> int:

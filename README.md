@@ -116,7 +116,7 @@ python -m backend.arena.value_table --games 3000    # refit the win model
 ## Known limits
 
 - **Base game only.** Expansion cards are not modelled.
-- **Unseen colours.** There is no per-card colour table, so you tap each card's colour when you see it, and the colours of unseen cards are treated as unknown.
+- **Colours.** The engine knows how many cards of each colour the deck holds (from the ColorADD card in the box), so it counts colours as it counts card types and rejects impossible ones. It does not know which card types carry which colours, so you tap each card's colour when you see it, and hidden cards get colours drawn from those still unaccounted for.
 - **Search depth.** The search branches on your current decision only; later choices inside a simulation come from the rollout policy.
 - **Instant win.** The four-Mermaid win is checked when the round is scored, not the moment the fourth Mermaid is drawn.
 

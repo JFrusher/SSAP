@@ -17,16 +17,28 @@ export const LABEL: Record<CardName, string> = {
   mermaid: "Mermaid",
 };
 
-export const COLORS: Color[] = [
-  "dark_blue", "light_blue", "black", "yellow", "green", "purple", "grey", "light_orange", "pink", "orange",
-];
-
-export const SWATCH: Record<Color, string> = {
-  dark_blue: "#1e3a8a", light_blue: "#7dd3fc", black: "#111827", yellow: "#facc15", green: "#4ade80",
-  purple: "#a855f7", grey: "#9ca3af", light_orange: "#fdba74", pink: "#f472b6", orange: "#f97316", white: "#ffffff",
+// Colour totals from the ColorADD card in the box (display copy of backend COLOR_COMPOSITION).
+export const COLOR_COMPOSITION: Record<Color, number> = {
+  light_blue: 9, dark_blue: 9, yellow: 8, black: 8, green: 6, white: 4,
+  grey: 4, purple: 4, light_orange: 3, pink: 2, orange: 1,
 };
 
-export const colorLabel = (c: Color) => c.replace("_", " ");
+export const COLORS: Color[] = [
+  "light_blue", "dark_blue", "yellow", "black", "green", "grey", "purple", "light_orange", "pink", "orange",
+];
+
+// Matched to the ColorADD card's swatches.
+export const SWATCH: Record<Color, string> = {
+  light_blue: "#3BA9BE", dark_blue: "#27338F", yellow: "#E5AE2F", black: "#16161A", green: "#7DC25A",
+  grey: "#6B6A6E", purple: "#9A6DC5", light_orange: "#EE9D67", pink: "#E26A9A", orange: "#E5592B", white: "#FFFFFF",
+};
+
+// The internal ids are short; the labels follow the card's wording.
+const COLOR_LABEL: Record<Color, string> = {
+  light_blue: "light blue", dark_blue: "dark blue", yellow: "yellow", black: "black", green: "light green",
+  grey: "light grey", purple: "purple", light_orange: "light orange", pink: "light pink", orange: "orange", white: "white",
+};
+export const colorLabel = (c: Color) => COLOR_LABEL[c];
 
 export const newCard = (name: CardName, color: Color): Card => ({
   id: Math.random().toString(36).slice(2, 10),
@@ -43,19 +55,18 @@ export const pileCards = (s: GameState, pile: Pile): Card[] => {
   return stack;
 };
 
-/** Cards of each name not yet seen by the hero this round (deck + opponents' unseen cards). */
-export const unseenCounts = (s: GameState | null, extra: Card[] = []): Record<CardName, number> => {
-  const left = { ...COMPOSITION };
-  if (!s || s.phase === "round_start") {
-    extra.forEach((c) => left[c.name]--);
-    return left;
-  }
-  const seen = [
+export interface Remaining { names: Record<CardName, number>; colors: Record<Color, number> }
+
+/** Card types and colours not yet seen by the hero this round (deck + opponents' unseen cards). */
+export const unseenCounts = (s: GameState | null, extra: Card[] = []): Remaining => {
+  const names = { ...COMPOSITION };
+  const colors = { ...COLOR_COMPOSITION };
+  const seen = !s || s.phase === "round_start" ? extra : [
     ...s.players.flatMap((p) => [...p.known_hand, ...p.played_duos]),
     ...pileCards(s, "a"),
     ...pileCards(s, "b"),
     ...extra,
   ];
-  seen.forEach((c) => left[c.name]--);
-  return left;
+  seen.forEach((c) => { names[c.name]--; colors[c.color]--; });
+  return { names, colors };
 };

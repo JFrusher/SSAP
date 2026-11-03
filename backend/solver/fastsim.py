@@ -7,7 +7,7 @@ import random
 from collections import Counter
 from dataclasses import dataclass, field
 
-from backend.engine.models import DECK_COMPOSITION, END_ROUND_MIN_POINTS, NON_WHITE_COLORS, CardName, Color
+from backend.engine.models import DECK_COMPOSITION, END_ROUND_MIN_POINTS, CardName, Color
 from backend.engine.rules import color_bonus_counts, score_counts
 
 FCard = tuple[CardName, Color]
@@ -33,10 +33,6 @@ def value(cards: list[FCard], card: FCard) -> float:
     if sum(c[0] == card[0] for c in nxt) + 1 > DECK_COMPOSITION[card[0]]:
         return now - base
     return now - base + 0.5 * max(0, points(nxt + [card]) - now)
-
-
-def random_color(rng: random.Random, name: CardName) -> Color:
-    return "white" if name == "mermaid" else rng.choice(NON_WHITE_COLORS)
 
 
 @dataclass

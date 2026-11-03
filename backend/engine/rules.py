@@ -1,4 +1,5 @@
 """Scoring and pure state transitions: apply_action(state, action) -> new state."""
+import random
 from collections import Counter
 from collections.abc import Iterable
 
@@ -12,6 +13,7 @@ from backend.engine.models import (  # noqa: F401  (action classes re-exported f
     ResolveRound,
     StartRound,
     TakeDiscard,
+    COLOR_COMPOSITION,
     DECK_COMPOSITION,
     DECK_SIZE,
     END_ROUND_MIN_POINTS,
@@ -100,22 +102,45 @@ def _next_player(state: GameState, player_id: str) -> str:
     return ids[(ids.index(player_id) + 1) % len(ids)]
 
 
+def _seen(state: GameState) -> list[Card]:
+    seen = [c for p in state.players for c in all_cards(p)]
+    return seen + state.discard_ledger.pile("a") + state.discard_ledger.pile("b")
+
+
 def unseen_counts(state: GameState) -> Counter[CardName]:
     """Cards the hero has not seen this round: the deck plus opponents' unseen hand cards."""
-    seen = [c for p in state.players for c in all_cards(p)]
-    seen += state.discard_ledger.pile("a") + state.discard_ledger.pile("b")
     pool = Counter(DECK_COMPOSITION)
-    pool.subtract(c.name for c in seen)
+    pool.subtract(c.name for c in _seen(state))
     return pool
 
 
+def unseen_colors(state: GameState) -> Counter[Color]:
+    """Colours of the cards the hero has not seen, from the box's colour totals."""
+    pool = Counter(COLOR_COMPOSITION)
+    pool.subtract(c.color for c in _seen(state))
+    return pool
+
+
+def draw_color(rng: random.Random, name: CardName, pool: Counter[Color]) -> Color:
+    """Colour for an unseen card, in proportion to the colours still unaccounted for; removed from `pool`."""
+    if name == "mermaid":
+        color: Color = "white"
+    else:
+        keys = [c for c in NON_WHITE_COLORS if pool[c] > 0]
+        color = rng.choices(keys, [pool[c] for c in keys])[0]
+    pool[color] -= 1
+    return color
+
+
 def assert_consistent(state: GameState) -> None:
-    """Fail fast if the tracked cards contradict the 58-card deck."""
+    """Fail fast if the tracked cards contradict the 58-card deck or the box's colour totals."""
     if state.phase == "round_start":
         return
     pool = unseen_counts(state)
     over = [n for n, k in pool.items() if k < 0]
     _require(not over, f"more {', '.join(over)} cards recorded than exist in the deck")
+    over_colors = [c.replace("_", " ") for c, k in unseen_colors(state).items() if k < 0]
+    _require(not over_colors, f"more {', '.join(over_colors)} cards recorded than the deck has")
     hidden = state.deck_count + sum(p.unknown_count for p in state.opponents)
     _require(sum(pool.values()) == hidden, f"card count mismatch: {sum(pool.values())} unseen vs {hidden} hidden")
     _require(state.hero.unknown_count == 0, "hero hand must be fully known")
