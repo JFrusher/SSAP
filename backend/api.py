@@ -53,6 +53,19 @@ def apply(req: ApplyRequest) -> StateResponse:
     return _respond(apply_action(req.state, req.action))
 
 
+class RefineRequest(BaseModel):
+    state: GameState
+    search: dict[str, float]
+    search_n: int
+    seed: int
+
+
+@app.post("/api/refine")
+def refine(req: RefineRequest) -> Recommendation:
+    """Anytime search: another batch of worlds for the same decision, merged into the earlier answer."""
+    return advise(req.state, seed=req.seed, prior=req.search, prior_n=req.search_n)
+
+
 @app.post("/api/keep")
 def keep(req: KeepRequest) -> KeepAdvice:
     return keep_search(req.state, req.first, req.second)
