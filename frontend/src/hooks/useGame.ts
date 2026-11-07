@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Action, Card, GameState, KeepAdvice, Recommendation, StateResponse } from "../types";
 
 const STORAGE_KEY = "salt-engine-v1";
+const REFINE_BATCHES = 8; // ~0.3 s each on top of the first answer
 
 interface Saved { stack: StateResponse[] }
 
@@ -32,6 +33,30 @@ export function useGame() {
   }, [stack]);
 
   const current = stack.at(-1) ?? null;
+
+  // Pondering: while this decision stays on screen, keep adding simulated deals to its search.
+  useEffect(() => {
+    const rec = current?.recommendation;
+    if (!current || !rec?.search || rec.search_n == null) return;
+    let live = true;
+    (async () => {
+      let r: Recommendation = rec;
+      for (let i = 0; i < REFINE_BATCHES && live; i++) {
+        try {
+          r = await post<Recommendation>("refine", {
+            state: current.state, search: r.search, search_n: r.search_n, seed: Math.floor(Math.random() * 2 ** 31),
+          });
+        } catch {
+          return; // the first answer stands; refining is only a bonus
+        }
+        if (!live) return;
+        const done = r;
+        setStack((s) => (s.at(-1)?.state === current.state ? [...s.slice(0, -1), { state: current.state, recommendation: done }] : s));
+      }
+    })();
+    return () => { live = false; };
+    // Re-run only when a new decision arrives, not when our own refinement replaces the entry.
+  }, [current?.state]);
 
   const run = useCallback(async (fn: () => Promise<StateResponse>) => {
     setBusy(true);

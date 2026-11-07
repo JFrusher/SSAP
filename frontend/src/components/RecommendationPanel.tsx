@@ -30,7 +30,7 @@ export function RecommendationPanel({ state, rec }: { state: GameState; rec: Rec
               </li>
             ))}
           </ol>
-          <p className="mt-1 text-xs text-ink-soft">Simulated to the end of the round from many possible deals. Number: expected round points vs the best opponent.</p>
+          <p className="mt-1 text-xs text-ink-soft">Simulated to the end of the round from {rec.search_n ?? "many"} possible deals. Number: expected round points vs the best opponent.</p>
         </div>
       )}
 
