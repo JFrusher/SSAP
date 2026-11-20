@@ -14,6 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from backend.engine.discard_ledger import IllegalAction
 from backend.engine.models import Card, GameState
 from backend.engine.rules import draw_color, unseen_colors
 from backend.solver import fastsim as fs
@@ -133,9 +134,11 @@ def _play(w: fs.World, a: RootAction, hero: int, drawn: tuple[Card, Card] | None
 
 
 def search(state: GameState, drawn: tuple[Card, Card] | None = None, budget_s: float = BUDGET_S,
-           beliefs: BeliefFactory | None = None, evaluate: Evaluator = margin_value) -> dict[RootAction, tuple[float, int]]:
-    """Returns {root action: (mean value, visits)} for the hero's current decision."""
-    rng = random.Random(state.round_number * 104729 + len(state.log))
+           beliefs: BeliefFactory | None = None, evaluate: Evaluator = margin_value,
+           seed: int | None = None) -> dict[RootAction, tuple[float, int]]:
+    """Returns {root action: (mean value, visits)} for the hero's current decision.
+    A different `seed` samples different worlds, so batches can be merged (anytime refinement)."""
+    rng = random.Random(seed if seed is not None else state.round_number * 104729 + len(state.log))
     b = (beliefs or BELIEFS)(state)
     hero = [p.player_id for p in state.players].index(state.hero_id)
 
@@ -175,15 +178,27 @@ def _margin(v: float) -> float:
     return round(v * 60 - 30, 2)  # undo margin_value's normalisation: expected round margin vs best opponent
 
 
-def advise(state: GameState) -> Recommendation:
-    """Greedy recommendation (for the numbers shown) with the hero's decision taken from search."""
+LIVE_BUDGET_S = 0.3  # per request; the phone keeps refining in the background (see /api/refine)
+
+
+def advise(state: GameState, seed: int | None = None, prior: dict[str, float] | None = None, prior_n: int = 0) -> Recommendation:
+    """Greedy recommendation (for the numbers shown) with the hero's decision taken from search.
+    With `prior` (an earlier answer's search for this same decision) the new batch is merged into it."""
     rec = recommend(state)
     if state.active_player_id != state.hero_id:
         return rec
-    result = search(state)
-    choice = best(result)
-    rec.search = {_label(a): _margin(v) for a, (v, _) in result.items()}
-    rec.search_best = _label(choice)
+    result = search(state, budget_s=LIVE_BUDGET_S, seed=seed)
+    labels = {_label(a): a for a in result}
+    n = next(iter(result.values()))[1]  # every action is played on the same worlds
+    margins = {lbl: _margin(v) for lbl, (v, _) in ((_label(a), r) for a, r in result.items())}
+    if prior is not None:
+        if set(prior) != set(margins):
+            raise IllegalAction("this decision changed since the earlier advice; ask for fresh advice")
+        margins = {k: round((prior[k] * prior_n + margins[k] * n) / (prior_n + n), 2) for k in margins}
+        n += prior_n
+    best_label = max(margins, key=lambda k: margins[k])
+    choice = labels[best_label]
+    rec.search, rec.search_n, rec.search_best = margins, n, best_label
     if choice[0] == "draw":
         rec.best_draw = choice[1]
     elif choice[0] == "duo" and rec.duos:
@@ -193,8 +208,11 @@ def advise(state: GameState) -> Recommendation:
     return rec
 
 
+KEEP_BUDGET_S = 0.4  # you wait for this one, so it gets more time up front
+
+
 def keep_search(state: GameState, first: Card, second: Card) -> KeepAdvice:
     """Which drawn card to keep and where to discard the other, decided by search."""
     advice = keep_advice(state, first, second)
-    keep, pile = best(search(state, (first, second)))[1:]
+    keep, pile = best(search(state, (first, second), budget_s=KEEP_BUDGET_S))[1:]
     return advice.model_copy(update={"keep_index": keep, "discard_pile": pile})

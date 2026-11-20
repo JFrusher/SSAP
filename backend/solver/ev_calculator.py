@@ -90,6 +90,7 @@ class Recommendation(BaseModel):
     # Search verdict for the hero's current decision (see solver/ismcts.advise): action -> expected round margin.
     search: dict[str, float] | None = None
     search_best: str | None = None
+    search_n: int | None = None  # worlds simulated so far for this decision
     opponents: list[OpponentView]
 
 
