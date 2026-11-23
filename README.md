@@ -8,7 +8,7 @@ Record the game on your phone as you play; get card counting, opponent reads and
 [![Live app](https://img.shields.io/badge/live-salt--engine.vercel.app-24386B?style=flat-square)](https://salt-engine.vercel.app)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-1F6F64?style=flat-square)
 ![React + TypeScript](https://img.shields.io/badge/react-typescript-1F6F64?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-50%20passing-1F6F64?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-86%20passing-1F6F64?style=flat-square)
 ![Search vs baseline](https://img.shields.io/badge/search%20vs%20baseline-75.7%25%20wins-B83A1E?style=flat-square)
 
 <table>
@@ -52,8 +52,9 @@ flowchart LR
 
 1. **Rules engine.** Every transition is a pure function `apply_action(state, action) -> state`. After each move the engine checks that the cards on record are consistent with the 58-card deck, so a mistyped card is rejected instead of quietly skewing the maths. Discard piles are derived from an append-only ledger.
 2. **Beliefs.** Hidden cards are counted exactly (hypergeometric), with one Bayesian update on top: an opponent who draws blind past a useful discard probably doesn't hold its partner.
-3. **Search.** For your current decision, the engine samples complete hidden worlds consistent with what you have seen, applies each candidate action, and plays the round to the end with a fast rollout policy. Every action is tried on the same sampled worlds (common random numbers), so the comparison between options is paired rather than drowned in deal noise. Budget: 150 ms per request.
-4. **The API is stateless.** The phone sends the whole state with each move, which is what lets the backend run as a Vercel serverless function.
+3. **Search.** For your current decision, the engine samples complete hidden worlds consistent with what you have seen, applies each candidate action, and plays the round to the end with a fast rollout policy. Every action is tried on the same sampled worlds (common random numbers), so the comparison between options is paired rather than drowned in deal noise. The simulated players only stop the round on what a real player could see (played duos, plus about 0.64 points per hidden card), not by peeking at hidden hands.
+4. **Thinking while you look.** The first answer takes about 0.3 s. While the same decision stays on screen, the phone asks for up to 8 more batches of deals and merges them in, so the advice sharpens while you think.
+5. **The API is stateless.** The phone sends the whole state with each move, which is what lets the backend run as a Vercel serverless function.
 
 ## Evidence, not intuition
 
@@ -65,11 +66,13 @@ Every engine change had to beat the previous version in a bot arena before it re
 | Arena fairness check | greedy vs greedy | 1,000 | 51.5% [48.4, 54.6] | ✅ |
 | Discard-pile advice | denial vs random pile | 2,000 | 53.1% [51.0, 55.3] | ✅ |
 | **Information-set search** | **search vs greedy** | **300** | **75.7% [70.5, 80.2]** | ✅ |
+| Honest playouts | no peeking vs peeking at hidden hands | 300 | 57.3% [51.7, 62.8] | ✅ |
+| Background search | 8× the search time vs 1× | 55 | 72.7% [59.8, 82.7] | ✅ |
 | Particle-filter beliefs | particles vs counting | 1,000 | 51.4% [48.3, 54.5] | ❌ not significant |
 | Win-probability evaluator | P(win game) vs round margin | 300 | 52.0% [46.4, 57.6] | ❌ not significant |
 | Learned opponent rationality | learned β vs fixed β | 600 | 49.3% [45.3, 53.3] | ❌ not significant |
 
-Three of the seven ideas did not earn their place, so they stay in the codebase and out of the app. The particle filter is still the better model on paper: it handles a steal between two opponents exactly, where simple counting forgets which card moved. But better hand predictions (about 2.5% lower error) did not turn into more wins.
+Three of the nine ideas did not earn their place, so they stay in the codebase and out of the app. The particle filter is still the better model on paper: it handles a steal between two opponents exactly, where simple counting forgets which card moved. But better hand predictions (about 2.5% lower error) did not turn into more wins.
 
 The arena also found two crashes that real players would have hit. Holding a single sailor made the lookahead imagine a third one (`IndexError`), and float rounding in deck estimates did the same thing later. Both now have regression tests that fail without the fix.
 
@@ -101,7 +104,7 @@ frontend/      React + TypeScript + Tailwind (Vite)
 
 ```bash
 pip install -r requirements.txt uvicorn pytest httpx
-python -m pytest                                  # 50 tests
+python -m pytest                                  # 86 tests
 python -m uvicorn backend.api:app --port 8000
 cd frontend && npm install && npm run dev         # proxies /api to :8000
 ```
