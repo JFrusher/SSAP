@@ -75,3 +75,14 @@ def test_playout_stop_rule_counts_cards_seen_taken_from_a_pile() -> None:
     assert fastsim.policy_call(w, 0) is None
     w.take(1, ("octopus", "black"))
     assert len(w.public[1]) == 4 and len(w.hands[1]) == 4
+
+
+def test_cached_points_match_scoring_in_any_order() -> None:
+    from collections import Counter
+
+    from backend.engine.rules import score_counts
+    rng = random.Random(5)
+    cards = [("crab", "dark_blue"), ("crab", "yellow"), ("shell", "pink"), ("shell", "black"), ("octopus", "pink")]
+    for _ in range(20):
+        rng.shuffle(cards)
+        assert fastsim.points(cards) == score_counts(Counter(c[0] for c in cards), Counter(c[1] for c in cards))
