@@ -45,6 +45,18 @@ class World:
     caller: int | None = None
     queue: list[int] = field(default_factory=list)
     extra: bool = False
+    # Hand cards everyone saw arrive (taken from a discard pile); a subset of `hands`, empty lists by default.
+    public: list[list[FCard]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.public:
+            self.public = [[] for _ in self.hands]
+
+    def take(self, s: int, card: FCard) -> None:
+        """Remove `card` from s's hand, and from its public part if it was there."""
+        self.hands[s].remove(card)
+        if card in self.public[s]:
+            self.public[s].remove(card)
 
     def mine(self, s: int) -> list[FCard]:
         return self.hands[s] + self.played[s]
@@ -52,13 +64,15 @@ class World:
     def copy(self) -> "World":
         return World([list(h) for h in self.hands], [list(p) for p in self.played],
                      {k: list(v) for k, v in self.piles.items()}, list(self.deck), self.active,
-                     self.caller, list(self.queue), self.extra)
+                     self.caller, list(self.queue), self.extra, [list(p) for p in self.public])
 
 
 # ------------------------------------------------------------ primitives (shared by search root and rollouts)
 
 def draw_pile(w: World, s: int, pile: str) -> None:
-    w.hands[s].append(w.piles[pile].pop())
+    card = w.piles[pile].pop()
+    w.hands[s].append(card)
+    w.public[s].append(card)
 
 
 def draw_deck(w: World, s: int, keep: int | None, pile: str | None, rng: random.Random) -> None:
@@ -86,7 +100,7 @@ def play_duo(w: World, s: int, duo: str, rng: random.Random) -> None:
     names = ("shark", "swimmer") if duo == "shark" else (duo, duo)
     for name in names:
         card = next(c for c in w.hands[s] if c[0] == name)
-        w.hands[s].remove(card)
+        w.take(s, card)
         w.played[s].append(card)
     if duo == "boat":
         w.extra = True
@@ -94,7 +108,9 @@ def play_duo(w: World, s: int, duo: str, rng: random.Random) -> None:
         cards = [(value(w.mine(s), c), p, i) for p in ("a", "b") for i, c in enumerate(w.piles[p])]
         if cards:
             _, p, i = max(cards)
-            w.hands[s].append(w.piles[p].pop(i))
+            card = w.piles[p].pop(i)
+            w.hands[s].append(card)
+            w.public[s].append(card)
     elif duo == "fish":
         if w.deck:
             w.hands[s].append(w.deck.pop())
@@ -102,7 +118,9 @@ def play_duo(w: World, s: int, duo: str, rng: random.Random) -> None:
         victims = [v for v in range(len(w.hands)) if v != s and w.hands[v]]
         if victims:
             v = max(victims, key=lambda v: len(w.hands[v]))
-            w.hands[s].append(w.hands[v].pop(rng.randrange(len(w.hands[v]))))
+            card = rng.choice(w.hands[v])
+            w.take(v, card)
+            w.hands[s].append(card)  # only the two players involved see what moved
 
 
 def end_turn(w: World, s: int, call: str | None) -> str | None:
@@ -141,14 +159,15 @@ def policy_draw(w: World, s: int, rng: random.Random) -> None:
         draw_deck(w, s, None, None, rng)
 
 
-# Measured over 3,000 playouts: mean points held per hidden hand card at the moments a Stop is possible
+# Measured over 3,000 playouts: mean points held per hand card at the moments a Stop is possible
 # (0.56-0.69 across hand sizes 3-8).
 HIDDEN_CARD_POINTS = 0.64
 
 
 def estimate_points(w: World, o: int) -> float:
-    """What another player can know of o's score: played duos are public, hand cards are only counted."""
-    return points(w.played[o]) + HIDDEN_CARD_POINTS * len(w.hands[o])
+    """What another player can know of o's score: played duos and cards taken from a discard pile are seen,
+    other hand cards are only counted."""
+    return points(w.played[o] + w.public[o]) + HIDDEN_CARD_POINTS * (len(w.hands[o]) - len(w.public[o]))
 
 
 def policy_call(w: World, s: int) -> str | None:

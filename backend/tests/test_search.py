@@ -65,3 +65,13 @@ def test_refine_merges_batches_weighted_by_deals(monkeypatch) -> None:  # type: 
     assert merged.search == {k: 4.5 for k in prior}  # (6*300 + 0*100) / 400
     with pytest.raises(IllegalAction):
         ismcts.advise(s, seed=3, prior={"draw:deck": 0.0}, prior_n=10)
+
+
+def test_playout_stop_rule_counts_cards_seen_taken_from_a_pile() -> None:
+    octopi = [("octopus", "black")] * 5
+    w = fastsim.World(hands=[[("shell", "pink")] * 4, list(octopi)], played=[[("crab", "grey")] * 2, []],
+                      piles={"a": [], "b": []}, deck=[], active=0, public=[[], list(octopi)])
+    # Same 12-point hand as above, but player 1 took every octopus from a discard pile in plain view.
+    assert fastsim.policy_call(w, 0) is None
+    w.take(1, ("octopus", "black"))
+    assert len(w.public[1]) == 4 and len(w.hands[1]) == 4

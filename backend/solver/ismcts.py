@@ -81,9 +81,12 @@ def determinize(state: GameState, beliefs: Any, rng: random.Random) -> fs.World:
     rng.shuffle(deck)
     seat = {p.player_id: i for i, p in enumerate(state.players)}
     piles = {k: [(c.name, c.color) for c in state.discard_ledger.pile(k)] for k in ("a", "b")}  # type: ignore[arg-type]
+    # Opponents' known cards were seen entering their hands, so everyone knows them. The hero's own hand is
+    # treated as unseen by the others (shortcut: the state does not record which of the hero's cards they saw arrive).
+    public = [[] if p.player_id == state.hero_id else [(c.name, c.color) for c in p.known_hand] for p in state.players]
     return fs.World(hands, played, piles, deck, seat[state.active_player_id],
                     seat[state.last_chance_caller] if state.last_chance_caller else None,
-                    [seat[q] for q in state.last_chance_queue], state.extra_turn_pending)
+                    [seat[q] for q in state.last_chance_queue], state.extra_turn_pending, public)
 
 
 def _extract(w: fs.World, card: Card, rng: random.Random) -> None:
