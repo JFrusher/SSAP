@@ -65,3 +65,13 @@ def test_refine_merges_batches_weighted_by_deals(monkeypatch) -> None:  # type: 
     assert merged.search == {k: 4.5 for k in prior}  # (6*300 + 0*100) / 400
     with pytest.raises(IllegalAction):
         ismcts.advise(s, seed=3, prior={"draw:deck": 0.0}, prior_n=10)
+
+def test_cached_points_match_scoring_in_any_order() -> None:
+    from collections import Counter
+
+    from backend.engine.rules import score_counts
+    rng = random.Random(5)
+    cards = [("crab", "dark_blue"), ("crab", "yellow"), ("shell", "pink"), ("shell", "black"), ("octopus", "pink")]
+    for _ in range(20):
+        rng.shuffle(cards)
+        assert fastsim.points(cards) == score_counts(Counter(c[0] for c in cards), Counter(c[1] for c in cards))
